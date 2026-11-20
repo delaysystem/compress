@@ -1,0 +1,1 @@
+{"competition_sources": [], "dataset_sources": [], "enable_gpu": true, "enable_internet": true, "id": "blonded2/qwen-technique-probe", "code_file": "qwen-probe.ipynb", "is_private": true, "kernel_sources": [], "kernel_type": "notebook", "language": "python", "title": "qwen technique probe"}

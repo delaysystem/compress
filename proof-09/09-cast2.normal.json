@@ -1,0 +1,375 @@
+{
+  "stage": "09-coral-agent",
+  "path": "normal",
+  "verdict": "PASS",
+  "ms": 436474,
+  "timings": [
+    {
+      "label": "provision agent route",
+      "ms": 11596
+    },
+    {
+      "label": "browser session",
+      "ms": 298
+    },
+    {
+      "label": "browser session",
+      "ms": 177
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 389
+    },
+    {
+      "label": "superseded echo (alarm verdict pending)",
+      "ms": 25171
+    },
+    {
+      "label": "bind wait",
+      "ms": 25171
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 128976
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 2696
+    },
+    {
+      "label": "superseded action turn Customer_Service_Assistant_16jO500000E3G3N/Check_Weather_179O50000015sC5 (alarm verdict)",
+      "ms": 131672
+    },
+    {
+      "label": "transcript single-reply",
+      "ms": 34728
+    },
+    {
+      "label": "browser session",
+      "ms": 251
+    },
+    {
+      "label": "browser session",
+      "ms": 560
+    },
+    {
+      "label": "browser session",
+      "ms": 597
+    },
+    {
+      "label": "browser session",
+      "ms": 596
+    },
+    {
+      "label": "browser session",
+      "ms": 606
+    },
+    {
+      "label": "browser session",
+      "ms": 617
+    },
+    {
+      "label": "browser session",
+      "ms": 664
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 199
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 222
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 214
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 222
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 229
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 243
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 212
+    },
+    {
+      "label": "browser/echo",
+      "ms": 16710
+    },
+    {
+      "label": "bind wait",
+      "ms": 16710
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 87
+    },
+    {
+      "label": "browser/echo",
+      "ms": 16800
+    },
+    {
+      "label": "bind wait",
+      "ms": 16800
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 87
+    },
+    {
+      "label": "browser/echo",
+      "ms": 16833
+    },
+    {
+      "label": "bind wait",
+      "ms": 16833
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 91
+    },
+    {
+      "label": "superseded echo",
+      "ms": 17427
+    },
+    {
+      "label": "superseded bind",
+      "ms": 17427
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 104
+    },
+    {
+      "label": "browser/echo",
+      "ms": 20125
+    },
+    {
+      "label": "bind wait",
+      "ms": 20125
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 90
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 3791
+    },
+    {
+      "label": "action turn Customer_Service_Assistant_16jO500000E3G3N/Generate_Personalized_Schedule_EA_179O50000015sC5",
+      "ms": 3878
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 3790
+    },
+    {
+      "label": "action turn Customer_Service_Assistant_16jO500000E3G3N/QueryRecords_179O50000015sC5",
+      "ms": 3894
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 4980
+    },
+    {
+      "label": "action turn Customer_Service_Assistant_16jO500000E3G3N/Issue_Bulk_Resort_Credits_179O50000015sC5",
+      "ms": 5067
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 4869
+    },
+    {
+      "label": "action turn Customer_Service_Assistant_16jO500000E3G3N/Issue_Resort_Credit_179O50000015sC5",
+      "ms": 4960
+    },
+    {
+      "label": "superseded echo",
+      "ms": 25162
+    },
+    {
+      "label": "superseded bind",
+      "ms": 25162
+    },
+    {
+      "label": "superseded echo (alarm verdict pending)",
+      "ms": 25180
+    },
+    {
+      "label": "bind wait",
+      "ms": 25180
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 8055
+    },
+    {
+      "label": "action turn Customer_Service_Assistant_16jO500000E3G3N/Get_Customer_From_Email_or_Membership_Number_179O50000015sC5",
+      "ms": 8145
+    },
+    {
+      "label": "browser session",
+      "ms": 130
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 278
+    },
+    {
+      "label": "superseded echo",
+      "ms": 19504
+    },
+    {
+      "label": "superseded bind",
+      "ms": 19504
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 103
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 3545
+    },
+    {
+      "label": "action turn Customer_Service_Assistant_16jO500000E3G3N/QueryRecords_179O50000015sC5",
+      "ms": 3648
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 31563
+    },
+    {
+      "label": "transcript single-reply",
+      "ms": 38384
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 33598
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 3011
+    },
+    {
+      "label": "superseded action turn Customer_Service_Assistant_16jO500000E3G3N/GetRecordDetails_179O50000015sC5 (alarm verdict)",
+      "ms": 34574
+    },
+    {
+      "label": "transcript single-reply",
+      "ms": 40163
+    },
+    {
+      "label": "browser session",
+      "ms": 123
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 4033
+    },
+    {
+      "label": "superseded action turn Customer_Service_Assistant_16jO500000E3G3N/SummarizeRecord_179O50000015sC5 (alarm verdict)",
+      "ms": 37631
+    },
+    {
+      "label": "transcript single-reply",
+      "ms": 42091
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 239
+    },
+    {
+      "label": "transcript single-reply",
+      "ms": 37317
+    },
+    {
+      "label": "browser session",
+      "ms": 164
+    },
+    {
+      "label": "scrt inbound",
+      "ms": 208
+    },
+    {
+      "label": "browser/echo",
+      "ms": 20738
+    },
+    {
+      "label": "bind wait",
+      "ms": 20738
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 94
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 2796
+    },
+    {
+      "label": "action turn Customer_Service_Assistant_16jO500000E3G3N/QueryRecords_179O50000015sC5",
+      "ms": 2890
+    },
+    {
+      "label": "superseded echo (alarm verdict pending)",
+      "ms": 25070
+    },
+    {
+      "label": "bind wait",
+      "ms": 25070
+    },
+    {
+      "label": "transcript single-reply",
+      "ms": 38175
+    },
+    {
+      "label": "transcript single-reply",
+      "ms": 36364
+    },
+    {
+      "label": "agent outbox submitted",
+      "ms": 32042
+    },
+    {
+      "label": "agent notification delivered",
+      "ms": 2763
+    },
+    {
+      "label": "superseded action turn Customer_Service_Assistant_16jO500000E3G3N/GetRecordDetails_179O50000015sC5 (alarm verdict)",
+      "ms": 34805
+    },
+    {
+      "label": "transcript single-reply",
+      "ms": 36916
+    }
+  ],
+  "blind": {
+    "soql": "deployment messaging: per-action reply read-back + blind credit rows",
+    "count": 8
+  },
+  "artifacts": {
+    "shots": [
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-01-setup.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-02-pass-Customer-Service-Assistant-16jO500000E3G.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-03-pass-Customer-Service-Assistant-16jO500000E3G.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-04-pass-Customer-Service-Assistant-16jO500000E3G.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-05-pass-Customer-Service-Assistant-16jO500000E3G.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-06-pass-Customer-Service-Assistant-16jO500000E3G.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-07-pass-Customer-Service-Assistant-16jO500000E3G.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-08-pass-Customer-Service-Assistant-16jO500000E3G.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-09-pass-Customer-Service-Assistant-16jO500000E3G.png",
+      "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/shots/09-coral-agent.normal/coral-10-verdict.png"
+    ],
+    "video": "/home/saul/Music/tuff/tubot-cli/dist/engine/tubot-sf-app/e2e/videos/segments-normal/09-coral-agent.normal.webm"
+  }
+}

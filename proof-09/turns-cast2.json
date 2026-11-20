@@ -1,0 +1,97 @@
+{
+  "agent": {
+    "name": "Coral_Cloud_Employee_Agent",
+    "type": "Bot",
+    "source": "capability"
+  },
+  "results": [
+    {
+      "action": "Customer_Service_Assistant_16jO500000E3G3N/Check_Weather_179O50000015sC5",
+      "topic": "Customer_Service_Assistant_16jO500000E3G3N",
+      "verdict": "PASS",
+      "ms": 131672,
+      "agentMs": -1,
+      "utterance": "Please check Weather for me: TuBot E2E 91726875 (membership 10091726875), with date To Check 2026-11-26.",
+      "utteranceSource": "d1-schema",
+      "replyExcerpt": "On September 25, 1951, the weather at Coral Cloud Resorts was cloudy with temperatures ranging from 52.2°F (11.2°C) to 65.8°F (18.8°C).",
+      "evidence": "alarm-path agentMs=n/a bindWaitMs=25171 + reply rendered + differs + single + grounded"
+    },
+    {
+      "action": "Customer_Service_Assistant_16jO500000E3G3N/Generate_Personalized_Schedule_EA_179O50000015sC5",
+      "topic": "Customer_Service_Assistant_16jO500000E3G3N",
+      "verdict": "PASS",
+      "ms": 3878,
+      "agentMs": 14755,
+      "utterance": "Please generate Personalized Schedule EA for me: TuBot E2E 91726875 (membership 10091726875), with contact Id 003O500004AnC7RIAV.",
+      "utteranceSource": "d1-schema",
+      "replyExcerpt": "I’m here to help with your resort experience, but I’m unable to load today’s activity list at the moment. Please let me know if you’d like to try again or if there’s anything else I can assist you with.\nI could not complete one part of this request.",
+      "evidence": "inline agentMs=14755 bindWaitMs=16710 + reply rendered + differs + single + grounded"
+    },
+    {
+      "action": "Customer_Service_Assistant_16jO500000E3G3N/GetRecordDetails_179O50000015sC5",
+      "topic": "Customer_Service_Assistant_16jO500000E3G3N",
+      "verdict": "PASS",
+      "ms": 34805,
+      "agentMs": -1,
+      "utterance": "I'd like you to get Record Details for me: TuBot E2E 91726875 (membership 10091726875), with record Id {\"sObjectInfo\": {\"apiName\": \"Contact\"}, \"id\": \"003O500004AnC7RIAV\"}.",
+      "utteranceSource": "d1-schema",
+      "replyExcerpt": "d States\n- Birthdate: 1990-06-15\n\nRelated Records:\n- Credits: 2 records found\n  1. Amount: 41, Created: 2026-11-19T12:39:36.000+0000\n  2. Amount: 42, Created: 2026-11-19T12:39:34.000+0000\n\nRecord ID: 003O500004AnC7RIAV\nCreated: 2026-11-19T12:35:36.000+0000\nLast Modified: 2026-11-19T12:35:36.000+0000",
+      "evidence": "alarm-path agentMs=n/a bindWaitMs=25070 + reply rendered + differs + single + grounded (attempt 2/4)"
+    },
+    {
+      "action": "Customer_Service_Assistant_16jO500000E3G3N/Get_Customer_From_Email_or_Membership_Number_179O50000015sC5",
+      "topic": "Customer_Service_Assistant_16jO500000E3G3N",
+      "verdict": "PASS",
+      "ms": 8145,
+      "agentMs": 18592,
+      "utterance": "Please get Customer From Email or Membership Number for me: TuBot E2E 91726875 (membership 10091726875), with customer Membership Number 10091726875.",
+      "utteranceSource": "d1-schema",
+      "replyExcerpt": "I found the customer with membership number 10091726875. The customer's name is Testy TuBot E2E 91726875, email is tubot-e2e-00do500000v90pz-91726875@example.invalid, and contact ID is 003O500004AnC7RIAV.",
+      "evidence": "inline agentMs=18592 bindWaitMs=20125 + reply rendered + differs + single + grounded"
+    },
+    {
+      "action": "Customer_Service_Assistant_16jO500000E3G3N/Issue_Bulk_Resort_Credits_179O50000015sC5",
+      "topic": "Customer_Service_Assistant_16jO500000E3G3N",
+      "verdict": "PASS",
+      "ms": 5067,
+      "agentMs": 15081,
+      "utterance": "Please issue Bulk Resort Credits for me: TuBot E2E 91726875 (membership 10091726875), with amount $41, contact Records [{\"sObjectInfo\": {\"apiName\": \"Contact\"}, \"id\": \"003O500004AnC7RIAV\"}, {\"sObjectInfo\": {\"apiName\": \"Contact\"}, \"id\": \"003O500004AmUzMIAV\"}].",
+      "utteranceSource": "d1-schema",
+      "replyExcerpt": "Issued $41 resort credit to 2 customers.",
+      "evidence": "inline agentMs=15081 bindWaitMs=16800 + reply rendered + differs + single + grounded + blind credit row"
+    },
+    {
+      "action": "Customer_Service_Assistant_16jO500000E3G3N/Issue_Resort_Credit_179O50000015sC5",
+      "topic": "Customer_Service_Assistant_16jO500000E3G3N",
+      "verdict": "PASS",
+      "ms": 4960,
+      "agentMs": 15185,
+      "utterance": "Please issue Resort Credit for me: TuBot E2E 91726875 (membership 10091726875), with amount $42, contactid 003O500004AnC7RIAV.",
+      "utteranceSource": "d1-schema",
+      "replyExcerpt": "I have successfully issued a resort credit of $42 to the contact with ID 003O500004AnC7RIAV. The credit ID is a01O500004eyHKZIA2.",
+      "evidence": "inline agentMs=15185 bindWaitMs=16833 + reply rendered + differs + single + grounded + blind credit row"
+    },
+    {
+      "action": "Customer_Service_Assistant_16jO500000E3G3N/QueryRecords_179O50000015sC5",
+      "topic": "Customer_Service_Assistant_16jO500000E3G3N",
+      "verdict": "PASS",
+      "ms": 2890,
+      "agentMs": 19349,
+      "utterance": "Please query Records for me: TuBot E2E 91726875 (membership 10091726875). Details: query the Contact records with membership number 10091726875.",
+      "utteranceSource": "d1-schema",
+      "replyExcerpt": "I found the contact with membership number 10091726875. The contact ID is 003O500004AnC7RIAV.",
+      "evidence": "inline agentMs=19349 bindWaitMs=20738 + reply rendered + differs + single + grounded (attempt 3/4)"
+    },
+    {
+      "action": "Customer_Service_Assistant_16jO500000E3G3N/SummarizeRecord_179O50000015sC5",
+      "topic": "Customer_Service_Assistant_16jO500000E3G3N",
+      "verdict": "PASS",
+      "ms": 37631,
+      "agentMs": -1,
+      "utterance": "Please summarize Record for me: TuBot E2E 91726875 (membership 10091726875), with record Id {\"sObjectInfo\": {\"apiName\": \"Contact\"}, \"id\": \"003O500004AnC7RIAV\"}.",
+      "utteranceSource": "d1-schema",
+      "replyExcerpt": "500000oMisGIAS)  \n- **Last Modified**: 2026-11-19T12:35:36.000+0000 (by 005O500000oMisGIAS)  \n- **Photo URL**: /services/images/photo/003O500004AnC7RIAV  \n- **Is Deleted**: false  \n- **Record ID**: 003O500004AnC7RIAV  \n\n*No values were invented; all fields are drawn strictly from the provided data.*",
+      "evidence": "alarm-path agentMs=n/a bindWaitMs=25180 + reply rendered + differs + single + grounded"
+    }
+  ]
+}

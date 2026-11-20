@@ -1,0 +1,50 @@
+# Secrets, data, and build outputs never get committed.
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+*.vars
+vendor/
+data/
+node_modules/
+dist/
+.wrangler/
+coverage/
+*.tsbuildinfo
+
+# Python environments and caches
+.venv/
+.uv-cache/
+__pycache__/
+
+# Local demo recordings / renders (large binaries)
+*.cast
+*.mp4
+.freebuff/
+
+# Logs and OS files
+*.log
+.DS_Store
+
+# AI agent instructions and internal planning docs (not published)
+AGENTS.md
+AGENTS2.md
+agents2.md
+REPO-RULES.md
+PLAN.md
+CONTEXT.md
+
+
+# Lock files (regenerate locally with bun/npm install)
+bun.lock
+bun.lockb
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Generated Worker types (run: wrangler types)
+worker-configuration.d.ts
+
+# Internal audit / security-review artifacts
+security-review/
+

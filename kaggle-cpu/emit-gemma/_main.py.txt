@@ -1,0 +1,286 @@
+import json as _json
+import sys as _sys
+import urllib.request as _urlreq
+
+TUNNEL = ""  # stamped by phonehome/push.sh (public receiver URL); empty = disabled
+TOKEN = ""  # stamped by phonehome/push.sh (bearer token); empty = disabled
+KID = 'cpu-emit-gemma'
+
+
+def hb(phase, msg=''):
+    if not TUNNEL or not TOKEN:
+        return
+    try:
+        body = _json.dumps({'kernel': KID, 'phase': phase, 'msg': str(msg)[:300]}).encode()
+        req = _urlreq.Request(f'{TUNNEL}/hb?token={TOKEN}', data=body, headers={'Content-Type': 'application/json'})
+        with _urlreq.urlopen(req, timeout=5):
+            pass
+    except Exception:
+        pass
+
+
+_prev_hook = _sys.excepthook
+
+
+def _hook(t, v, tb, _p=_prev_hook):
+    hb('fatal', f'{t.__name__}: {v}')
+    return _p(t, v, tb)
+
+
+_sys.excepthook = _hook
+print('phone-home:', 'ON' if TUNNEL and TOKEN else 'OFF (unstamped)')
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.request
+
+REPO = 'unsloth/gemma-4-12b-it-GGUF'
+GGUF_FILE = 'gemma-4-12b-it-Q6_K.gguf'
+N_CTX = 2048
+PORT = 8086
+TEMP = 0
+MAX_TOKENS = 256
+BUDGET = 4
+
+os.environ['HF_HUB_ENABLE_HF_TRANSFER'] = '1'
+from huggingface_hub import hf_hub_download
+
+PROMPT_HEAD = __HEAD__
+REFS = json.loads(__REFS__)
+ARITIES = json.loads(__ARITIES__)
+NREFS = len(REFS)
+assert NREFS >= 1, NREFS
+print('emit set OK:', NREFS, 'refs (embedded)')
+hb('eval-ok', f'{len(REFS)} refs')
+
+hb('downloading', GGUF_FILE)
+path = hf_hub_download(repo_id=REPO, filename=GGUF_FILE)
+print('downloaded:', path, flush=True)
+hb('downloaded', GGUF_FILE)
+
+log = open('/tmp/llama-server.log', 'w')
+help_txt = subprocess.run([sys.executable, '-m', 'llama_cpp.server', '--help'], capture_output=True, text=True).stdout
+for flag in ['--n_threads', '--n_threads_batch', '--n_batch', '--n_ubatch', '--type_k', '--type_v', '--use_mlock', '--flash_attn']:
+    assert f' {flag}' in help_txt or f'\n{flag}' in help_txt, f'{flag} missing from server --help'
+EXTRA = ['--n_threads', '4', '--n_threads_batch', '4', '--n_batch', '512', '--n_ubatch', '512',
+         '--type_k', '8', '--type_v', '8', '--use_mlock', 'true', '--flash_attn', 'true']
+print('tuned flags:', ' '.join(EXTRA), flush=True)
+cmd = [sys.executable, '-m', 'llama_cpp.server',
+       '--model', path, '--n_gpu_layers', '0',
+       '--n_ctx', str(N_CTX), '--host', '127.0.0.1',
+       '--port', str(PORT)] + EXTRA
+proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
+for i in range(60):
+    if proc.poll() is not None:
+        print('--- server died; log tail ---')
+        print(''.join(open('/tmp/llama-server.log').readlines()[-40:]))
+        print('--- env capsule ---')
+        print(subprocess.run('free -g; df -h /tmp | tail -1', shell=True, capture_output=True, text=True).stdout)
+        raise RuntimeError(f"server exited with code {proc.returncode}")
+    time.sleep(10)
+    try:
+        with urllib.request.urlopen(f'http://127.0.0.1:{PORT}/v1/models', timeout=5) as r:
+            print('READY, status', r.status, flush=True)
+            hb('ready', 'gemma12-emit')
+            break
+    except Exception:
+        if i % 6 == 0:
+            print(f'waiting for server... ({i * 10}s)', flush=True)
+else:
+    raise RuntimeError('server did not come up in 10 min')
+
+CODE_RE = re.compile(r'^(?::([a-z]{1,2})(?:\|(.*))?|([a-z]{1,2})\|(.*))$')
+
+
+def _split_code(s):
+    m = CODE_RE.match(s)
+    if not m:
+        return None
+    if m.group(1) is not None:
+        return m.group(1), m.group(2) or ''
+    return m.group(3), m.group(4) or ''
+
+
+def slot_violations(text, budget):
+    out = []
+    for i, ln in enumerate(text.split('\n')):
+        s = ln.strip()
+        parts = _split_code(s)
+        if not parts:
+            continue
+        code, rest = parts
+        for v in rest.split('|'):
+            if len(v.split()) > budget:
+                out.append((i + 1, code, len(v.split())))
+    return out
+
+
+def code_violations(text):
+    out = []
+    for i, ln in enumerate(text.split('\n')):
+        s = ln.strip()
+        parts = _split_code(s)
+        if not parts:
+            continue
+        code, rest = parts
+        if code not in ARITIES:
+            out.append((i + 1, code, 'unknown', -1, -1))
+            continue
+        vals = rest.split('|')
+        while vals and vals[-1] == '':
+            vals.pop()
+        if len(vals) != ARITIES[code]:
+            out.append((i + 1, code, 'arity', ARITIES[code], len(vals)))
+    return out
+
+
+def repair_ask(prompt, ir, code, slots, budget):
+    bullets = []
+    for (ln, c, kind, want, got) in code:
+        if kind == 'arity':
+            want_txt = 'no slots' if want == 0 else f'exactly {want} slot' + ('s' if want != 1 else '')
+            bullets.append(f"line {ln}: code '{c}' needs {want_txt}, got {got} -- fix the |-separated values to match the codebook entry (add, merge, or drop values; keep every entity).")
+        else:
+            bullets.append(f"line {ln}: unknown code '{c}' (not in the codebook) -- use a codebook code or a plain-text line.")
+    for (ln, c, w) in slots:
+        bullets.append(f'line {ln} ({c}, {w} words) exceeds the {budget}-word slot budget -- shorten to values only (numbers, names, URLs, markers, short labels).')
+    return prompt + '\n\nYOUR IR:\n' + ir + '\n\nThat IR violates the emission rules:\n' + '\n'.join('- ' + b for b in bullets) + '\n\nRe-emit the FULL corrected IR (every line, in order, with all entities preserved). FIXED IR:'
+
+
+def autofix_ir(text):
+    out = []
+    fixed = 0
+    for ln in text.split('\n'):
+        s = ln.strip()
+        parts = _split_code(s)
+        if not parts:
+            # ':'-led non-codes are malformed upstream; '@' lines are left
+            # alone (spanrefs can't be judged without a store).
+            if s.startswith(':'):
+                out.append('Note: ' + s)
+                fixed += 1
+            else:
+                out.append(ln)
+            continue
+        code, rest = parts
+        if code not in ARITIES:
+            t = ', '.join(rest.split('|'))
+            if t.strip():
+                out.append(t)
+            fixed += 1
+            continue
+        want = ARITIES[code]
+        vals = rest.split('|')
+        while vals and vals[-1] == '':
+            vals.pop()
+        if len(vals) == want:
+            out.append(ln)
+            continue
+        fixed += 1
+        if want == 0:
+            out.append(':' + code)
+            t = ', '.join(vals)
+            if t.strip():
+                out.append(t)
+            continue
+        if len(vals) > want:
+            tail = ', '.join(vals[want - 1:])
+            out.append('|'.join([code] + vals[:want - 1] + [tail]))
+            continue
+        if len(vals) == 1:
+            pieces = [p for p in (q.strip() for q in vals[0].split(',')) if p]
+            if len(pieces) == want:
+                out.append('|'.join([code] + pieces))
+                continue
+        t = ', '.join(vals)
+        if t.strip():
+            out.append(t)
+    return '\n'.join(out), fixed
+
+
+def chat(messages, max_tokens):
+    body = json.dumps({'messages': messages, 'temperature': TEMP, 'max_tokens': max_tokens}).encode()
+    req = urllib.request.Request(f'http://127.0.0.1:{PORT}/v1/chat/completions', data=body, headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=900) as r:
+        return json.load(r)
+
+
+def emit(prompt):
+    d = chat([{'role': 'user', 'content': prompt}], MAX_TOKENS)
+    return (d['choices'][0]['message']['content'] or ''), d['choices'][0]['finish_reason'], d
+
+
+s = chat([{'role': 'user', 'content': 'Reply with exactly: ok'}], 50)
+txt = s['choices'][0]['message']['content'] or ''
+print('smoke:', repr(txt[:80]), s['choices'][0]['finish_reason'], flush=True)
+assert txt.strip(), 'smoke empty'
+hb('smoke', txt[:60])
+
+outp = '/kaggle/working/emit-v9-gemma.jsonl'
+n_err = 0
+coded_total = line_total = 0
+with open(outp, 'w') as out:
+    for idx, item in enumerate(REFS):
+        prompt = PROMPT_HEAD + '\n---\n\nREPLY TO COMPRESS:\n' + item['reference'] + '\n\nIR:'
+        row = {'key': item['key'], 'irFirst': '', 'irCoded': '', 'repaired': False, 'budgetFails': 0, 'arityFails': 0, 'fixedLines': 0,
+               'finish': '', 'wallMs': 0, 'compTokens': None, 'error': None}
+        ok = False
+        for attempt in range(2):
+            try:
+                t0 = time.time()
+                text, finish, d = emit(prompt)
+                row['wallMs'] = round((time.time() - t0) * 1000)
+                usg = d.get('usage') or {}
+                row['compTokens'] = usg.get('completion_tokens')
+                row['finish'] = finish
+                row['irFirst'] = text
+                ir = text
+                comp_total = usg.get('completion_tokens') or 0
+                ir, n0 = autofix_ir(ir)
+                row['fixedLines'] = n0
+                for _r in range(2):
+                    cv = code_violations(ir)
+                    if not cv:
+                        break
+                    rtext, rfinish, rd = emit(repair_ask(prompt, ir, cv, [], BUDGET))
+                    ir, n1 = autofix_ir(rtext)
+                    row['fixedLines'] += n1
+                    row['repaired'] = True
+                    row['finish'] = rfinish
+                    rusg = rd.get('usage') or {}
+                    comp_total += rusg.get('completion_tokens') or 0
+                if row['compTokens'] is not None:
+                    row['compTokens'] = comp_total
+                row['irCoded'] = ir
+                row['budgetFails'] = len(slot_violations(ir, BUDGET))
+                row['arityFails'] = sum(1 for _ln, _c, k, _w, _g in code_violations(ir) if k == 'arity')
+                ok = True
+                break
+            except Exception as e:
+                row['error'] = f'{type(e).__name__}: {e}'[:200]
+                time.sleep(10)
+        if not ok:
+            n_err += 1
+        out.write(json.dumps(row) + '\n')
+        out.flush()
+        for ln in row['irCoded'].split('\n'):
+            s = ln.strip()
+            if not s:
+                continue
+            line_total += 1
+            if CODE_RE.match(s):
+                coded_total += 1
+        if (idx + 1) % 10 == 0:
+            cu = coded_total / max(1, line_total)
+            print(f'{idx + 1}/{NREFS}, {n_err} errors, codeUse {cu:.2f}', flush=True)
+            hb('progress', f'{idx + 1}/{NREFS} {n_err}err')
+        if idx == 9:
+            cu = coded_total / max(1, line_total)
+            assert cu >= 0.5, f'EMIT COMPLIANCE FAIL: codeUse {cu:.2f} at row 10'
+        assert n_err <= 10, f'error budget exceeded ({n_err})'
+print('done')
+hb('done', 'emit-gemma complete')

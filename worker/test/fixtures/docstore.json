@@ -1,0 +1,13 @@
+{
+	"_provenance": "Shape mirrors data/multidoc2dial doc entries (doc_id -> span_id -> text); content hand-written, 2026-11-11.",
+	"version": "kb-test-v1",
+	"documents": {
+		"Top 5 DMV Mistakes#3_0": {
+			"6": "Report address changes within ten days.",
+			"7": "This covers licenses and registrations."
+		},
+		"Fees#2_0": {
+			"1": "The fee is $10."
+		}
+	}
+}

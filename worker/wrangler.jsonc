@@ -1,0 +1,12 @@
+{
+	"name": "support-compressor",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-11",
+	"migrations": [
+		{ "tag": "v1", "new_sqlite_classes": ["BreakerStoreDO"] },
+		{ "tag": "v2", "deleted_classes": ["BreakerStoreDO"] }
+	]
+	// NOTE: no KV declared yet. Production span storage needs a namespace
+	// (owner step: wrangler kv:namespace create + binding here). Until then,
+	// span requests take the explicit 501 path (tested), never silent behavior.
+}

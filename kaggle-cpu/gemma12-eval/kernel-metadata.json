@@ -1,0 +1,1 @@
+{"competition_sources": [], "dataset_sources": ["blonded2/qwen-eval-irs"], "enable_gpu": false, "enable_internet": true, "id": "blonded2/cpu-gemma12-eval", "code_file": "gemma12-eval.ipynb", "is_private": true, "kernel_sources": [], "kernel_type": "notebook", "language": "python", "title": "cpu gemma12 eval"}

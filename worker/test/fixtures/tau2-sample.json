@@ -1,0 +1,23 @@
+{
+	"_provenance": "Message shapes from data/tau2/trajectories-retail-4trials.json (2026-11-11); IDs, emails, and order refs replaced with fixtures. Code must treat this as data, never branch on it.",
+	"messages": [
+		{ "role": "user", "content": "Where is my order?" },
+		{
+			"role": "assistant",
+			"content": null,
+			"tool_calls": [
+				{
+					"id": "call_fixture01",
+					"name": "get_order_details",
+					"arguments": { "order_id": "order-1" },
+					"requestor": "assistant"
+				}
+			]
+		},
+		{ "role": "tool", "content": "{\"status\": \"shipped\"}" },
+		{
+			"role": "assistant",
+			"content": "Your order order-1 shipped on Mar 26. Track it at https://example.com/t/1."
+		}
+	]
+}

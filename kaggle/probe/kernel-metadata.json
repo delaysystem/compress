@@ -1,0 +1,1 @@
+{"competition_sources": [], "dataset_sources": [], "enable_gpu": true, "enable_internet": true, "id": "blonded2/qwen3-8-27b-probe-bounded-60-min-window", "code_file": "qwen-probe.ipynb", "is_private": true, "kernel_sources": [], "kernel_type": "notebook", "language": "python", "title": "qwen3.8-27b probe bounded 60 min window"}

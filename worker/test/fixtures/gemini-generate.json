@@ -1,0 +1,34 @@
+{
+	"_provenance": "Recorded live 2026-11-11 (gemini-3.5-flash-lite, 'Reply with exactly: ok'); response object verbatim. No secrets possible in this shape.",
+	"response": {
+		"candidates": [
+			{
+				"content": {
+					"parts": [
+						{
+							"text": "ok",
+							"thoughtSignature": "EmAKXgFpFH0TjSazRG3pcRa9IXlPMPuB7iFl5vrsDg18JdsaSNLiwoffyk52tj1Pt1TLNLRBLCCtHARARs1IJJgBOYoP1uuHEd9ad9cxbBjmOIIgQBHPuhIDX+QreE3xubA="
+						}
+					],
+					"role": "model"
+				},
+				"finishReason": "STOP",
+				"index": 0
+			}
+		],
+		"usageMetadata": {
+			"promptTokenCount": 5,
+			"candidatesTokenCount": 1,
+			"totalTokenCount": 6,
+			"promptTokensDetails": [
+				{
+					"modality": "TEXT",
+					"tokenCount": 5
+				}
+			],
+			"serviceTier": "standard"
+		},
+		"modelVersion": "gemini-3.5-flash-lite",
+		"responseId": "h_3zauXzNeWIqtsPlLuP6AE"
+	}
+}

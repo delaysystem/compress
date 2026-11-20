@@ -1,0 +1,207 @@
+{
+	"_provenance": "geminiText recorded live 2026-11-11 (gemini-3.5-flash-lite, 3 SSE frames, verbatim incl. extras); geminiFunctionCall + openai* per provider docs, UNCONFIRMED (no tools support yet / no OpenAI key).",
+	"geminiText": [
+		{
+			"candidates": [
+				{
+					"content": { "parts": [{ "text": "one two" }], "role": "model" },
+					"index": 0
+				}
+			],
+			"usageMetadata": {
+				"promptTokenCount": 7,
+				"candidatesTokenCount": 2,
+				"totalTokenCount": 9,
+				"promptTokensDetails": [{ "modality": "TEXT", "tokenCount": 7 }],
+				"serviceTier": "standard"
+			},
+			"modelVersion": "gemini-3.5-flash-lite",
+			"responseId": "HQH0at3hPKn6qtsPiranYA"
+		},
+		{
+			"candidates": [
+				{
+					"content": { "parts": [{ "text": " three" }], "role": "model" },
+					"index": 0
+				}
+			],
+			"usageMetadata": {
+				"promptTokenCount": 7,
+				"candidatesTokenCount": 3,
+				"totalTokenCount": 10,
+				"promptTokensDetails": [{ "modality": "TEXT", "tokenCount": 7 }],
+				"serviceTier": "standard"
+			},
+			"modelVersion": "gemini-3.5-flash-lite",
+			"responseId": "HQH0at3hPKn6qtsPiranYA"
+		},
+		{
+			"candidates": [
+				{
+					"content": {
+						"parts": [
+							{
+								"text": "",
+								"thoughtSignature": "EmAKXgFpFH0T00KNRqwXrB/FUbKGelNoMgNpAgj74phV8jwi/EbWWPZas9Esw4qg1mjxln0Da+o2w71aIx5sQuQoMsVZ2LGSG10y/NfK2LQHM9QVj1PkEOBUxCmoGmqssnA="
+							}
+						],
+						"role": "model"
+					},
+					"finishReason": "STOP",
+					"index": 0
+				}
+			],
+			"usageMetadata": {
+				"promptTokenCount": 7,
+				"candidatesTokenCount": 3,
+				"totalTokenCount": 10,
+				"promptTokensDetails": [{ "modality": "TEXT", "tokenCount": 7 }],
+				"serviceTier": "standard"
+			},
+			"modelVersion": "gemini-3.5-flash-lite",
+			"responseId": "HQH0at3hPKn6qtsPiranYA"
+		}
+	],
+	"geminiFunctionCall": [
+		{
+			"candidates": [
+				{
+					"content": {
+						"parts": [
+							{ "text": "Looking it up. " },
+							{
+								"functionCall": { "name": "get_order", "args": { "id": "o-1" } }
+							}
+						]
+					}
+				}
+			]
+		},
+		{ "candidates": [{ "finishReason": "STOP" }] }
+	],
+	"openaiText": [
+		{ "choices": [{ "delta": { "content": "Hi " } }] },
+		{ "choices": [{ "delta": {}, "finish_reason": "stop" }] }
+	],
+	"openaiToolFragments": [
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [
+							{
+								"index": 0,
+								"id": "call_1",
+								"function": {
+									"name": "get_order",
+									"arguments": "{\"order_id\":"
+								}
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [
+							{ "index": 0, "function": { "arguments": " \"o-1\"" } }
+						]
+					}
+				}
+			]
+		},
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [{ "index": 0, "function": { "arguments": "}" } }]
+					}
+				}
+			]
+		},
+		{ "choices": [{ "delta": {}, "finish_reason": "tool_calls" }] }
+	],
+	"openaiInterleaved": [
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [
+							{
+								"index": 1,
+								"id": "b",
+								"function": { "name": "get_b", "arguments": "{\"y\":" }
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [
+							{
+								"index": 0,
+								"id": "a",
+								"function": { "name": "get_a", "arguments": "{\"x\":" }
+							}
+						]
+					}
+				}
+			]
+		},
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [{ "index": 1, "function": { "arguments": "2}" } }]
+					}
+				}
+			]
+		},
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [{ "index": 0, "function": { "arguments": "1}" } }]
+					}
+				}
+			]
+		},
+		{ "choices": [{ "delta": {}, "finish_reason": "tool_calls" }] }
+	],
+	"openaiBadJson": [
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [
+							{
+								"index": 0,
+								"function": { "name": "get_x", "arguments": "{oops" }
+							}
+						]
+					}
+				}
+			]
+		},
+		{ "choices": [{ "delta": {}, "finish_reason": "tool_calls" }] }
+	],
+	"openaiMissingName": [
+		{
+			"choices": [
+				{
+					"delta": {
+						"tool_calls": [{ "index": 0, "function": { "arguments": "{}" } }]
+					}
+				}
+			]
+		},
+		{ "choices": [{ "delta": {}, "finish_reason": "tool_calls" }] }
+	]
+}

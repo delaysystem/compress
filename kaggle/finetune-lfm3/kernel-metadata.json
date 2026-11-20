@@ -1,0 +1,1 @@
+{"id": "blonded2/lfm3-expand-qlora", "title": "lfm3 expand qlora", "code_file": "finetune-lfm3-expand.ipynb", "language": "python", "kernel_type": "notebook", "is_private": true, "enable_gpu": true, "enable_internet": true, "dataset_sources": ["blonded2/lfm3-expand-sft"], "kernel_sources": [], "competition_sources": []}

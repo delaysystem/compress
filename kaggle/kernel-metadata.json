@@ -1,0 +1,1 @@
+{"competition_sources": [], "dataset_sources": [], "enable_gpu": true, "enable_internet": true, "id": "blonded2/qwen3-8-27b-server", "code_file": "qwen3_8_27b_server.ipynb", "is_private": true, "kernel_sources": [], "kernel_type": "notebook", "language": "python", "title": "qwen3.8-27b server"}

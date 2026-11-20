@@ -1,0 +1,75 @@
+SETTINGS = [
+    ('default', {}),
+    ('low', {'reasoning_effort': 'low'}),
+    ('none', {'reasoning_effort': 'none'}),
+]
+ITEMS = D[0:2]
+print('effort rows:', [i['key'] for i in ITEMS], flush=True)
+
+
+def chat(prompt, extra):
+    body = {'messages': [{'role': 'user', 'content': prompt}], 'temperature': TEMP, 'max_tokens': MAX_TOKENS}
+    body.update(extra)
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(f'http://127.0.0.1:{PORT}/v1/chat/completions', data=data, headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=900) as r:
+        return json.load(r)
+
+
+outp = '/kaggle/working/replies-effort.jsonl'
+n_err = 0
+n_400 = 0
+with open(outp, 'w') as out:
+    for tag, repo, fname in MODELS:
+        t0 = time.time()
+        print(f'===== {tag}: downloading =====', flush=True)
+        hb('downloading', tag)
+        path = hf_hub_download(repo_id=repo, filename=fname)
+        hb('downloaded', tag)
+        proc = serve_and_wait(path)
+        hb('ready', tag)
+        s = chat('Reply with exactly: ok', {})
+        txt = s['choices'][0]['message']['content'] or ''
+        print(f'{tag} smoke:', repr(txt[:80]), s['choices'][0]['finish_reason'], flush=True)
+        assert txt.strip(), f'{tag} smoke empty'
+        hb('smoke', f'{tag} {txt[:60]}')
+        for setting, extra in SETTINGS:
+            for item in ITEMS:
+                prompt = PROMPT.replace('{draft}', item['ir'])
+                row = {'key': item['key'], 'cell': f'{tag}/{setting}', 'reply': '', 'finish': '', 'wallMs': 0, 'tokPerSec': None, 'compTokens': None, 'error': None}
+                ok = False
+                code = None
+                for attempt in range(2):
+                    try:
+                        tr0 = time.time()
+                        d = chat(prompt, extra)
+                        row['wallMs'] = round((time.time() - tr0) * 1000)
+                        row['reply'] = d['choices'][0]['message']['content'] or ''
+                        row['finish'] = d['choices'][0]['finish_reason']
+                        tm = d.get('timings') or {}
+                        row['tokPerSec'] = tm.get('predicted_per_second')
+                        usg = d.get('usage') or {}
+                        row['compTokens'] = usg.get('completion_tokens')
+                        ok = True
+                        break
+                    except Exception as ex:
+                        row['error'] = f'{type(ex).__name__}: {ex}'[:200]
+                        code = getattr(ex, 'code', None)
+                        if code == 400:
+                            n_400 += 1
+                            break
+                        time.sleep(10)
+                if not ok and code != 400:
+                    n_err += 1
+                out.write(json.dumps(row) + '\n')
+                out.flush()
+            hb('setting-done', f'{tag}/{setting} {n_err}err {n_400}rej')
+            print(f'{tag}/{setting} done, {n_err} errors, {n_400} rejected', flush=True)
+        assert n_err <= 4, f'error budget exceeded ({n_err})'
+        proc.terminate()
+        proc.wait(timeout=120)
+        shutil.rmtree(os.path.expanduser('~/.cache/huggingface'), ignore_errors=True)
+        print(f'{tag}: done in {(time.time() - t0) / 60:.1f} min', flush=True)
+        hb('model-done', f'{tag} {(time.time() - t0) / 60:.1f}min')
+print('ALL DONE')
+hb('done', 'effort complete')
