@@ -51,9 +51,30 @@ export const CEREBRAS_BASE_URL = 'https://api.cerebras.ai/v1';
 export const OPENROUTER_API_KEY_NAME = 'OPENROUTER_API_KEY';
 /** Public OpenRouter OpenAI-compatible endpoint. Origin: OpenRouter API docs; override per-call for tests/staging. */
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+/** Owner .dev.vars contract 2026-11-25: key names & OpenAI-compatible endpoints for the 7 additional providers. */
+export const OPENTYPHOON_API_KEY_NAME = 'OPENTYPHOON';
+export const OPENTYPHOON_BASE_URL = 'https://api.opentyphoon.ai/v1';
+export const ROUTMY_API_KEY_NAME = 'ROUTMY';
+export const ROUTMY_BASE_URL = 'https://api.rout.my/v1';
+export const EXPERIMENTALLABS_API_KEY_NAME = 'EXPERIMENTALLABS';
+export const EXPERIMENTALLABS_BASE_URL = 'https://api.experientiallabs.ai/v1';
+export const ANYAPI_API_KEY_NAME = 'ANYAPI';
+export const ANYAPI_BASE_URL = 'https://api.anyapi.ai/v1';
+export const DREAMPROMPTING_API_KEY_NAME = 'DREAMPROMPTING';
+export const DREAMPROMPTING_BASE_URL = 'https://dreamprompting.com/api/v1';
+export const REGOLO_API_KEY_NAME = 'REGOLO';
+export const REGOLO_BASE_URL = 'https://api.regolo.ai/v1';
+export const FREEMODEL_API_KEY_NAME = 'FREEMODEL';
+export const FREEMODEL_BASE_URL = 'https://api.freemodel.dev/v1';
 /** Owner contract 2026-11-12: lossless mode allows this many words different
  * from the flagship's native system-less output (word-level Levenshtein). */
 export const LOSSLESS_WORD_BUDGET = 3;
 /** PLAN.md fallback ladder: repair attempts before template render. SLM
  * calls are unbounded by policy; this caps per-message latency instead. */
 export const REPAIR_ATTEMPTS = 1;
+/** Latency experiment 2026-11-21/22: collapsing the four expansion rules
+ * into one line cuts prefill ~142->~50 tokens. Measured expander p50 7.6s
+ * baseline -> 6.0s compact (~1.27x pooled, ~1.5x bracketed); paired quality
+ * eval passed (see run-reports/034-latency-methods.md). Default is compact;
+ * set to 'full' to restore the verbose rules. */
+export const EXPANSION_PROMPT_MODE: 'full' | 'compact' = 'compact';

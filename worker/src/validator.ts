@@ -17,6 +17,7 @@
 import { checkComplete } from './completeness.ts';
 import { diffCountedEntities, extractEntities } from './entities.ts';
 import { ANCHOR_PREFIX } from './expander.ts';
+import { SUPPORTED_LANGUAGES, type SupportedLang } from './i18n.ts';
 
 export interface ExpansionCheckInput {
 	/** IR text after deterministic code/span splicing. */
@@ -27,6 +28,8 @@ export interface ExpansionCheckInput {
 	finishReason: string | null;
 	/** 'template' skips the model-only checks (no-echo, no-meta). Default 'model'. */
 	source?: 'model' | 'template';
+	/** Target language (default 'en'). Enables multilingual greeting/fluency checks. */
+	lang?: SupportedLang;
 }
 
 export interface CheckResult {
@@ -109,21 +112,34 @@ const SIGNOFF_CLOSE_RES = [
 	/(^|\n)\s*(customer )?support team\s*[.!?]?\s*$/im,
 ];
 
-function checkNoGreeting(output: string): CheckResult {
+function checkNoGreeting(
+	output: string,
+	lang: SupportedLang = 'en',
+): CheckResult {
 	const hits: string[] = [];
 	const trimmed = output.trim();
-	if (GREETING_OPEN_RE.test(trimmed)) {
+	const meta = SUPPORTED_LANGUAGES[lang];
+	if (
+		GREETING_OPEN_RE.test(trimmed) ||
+		(lang !== 'en' && meta.greetingOpenRe.test(trimmed))
+	) {
 		hits.push('greeting-open');
 	}
 	const sentences = trimmed
-		.split(/[.!?…]+/)
+		.split(/[.!?…।。！？؟۔]+/)
 		.map((s) => s.trim())
 		.filter((s) => s.length > 0);
 	const last = sentences[sentences.length - 1] ?? '';
-	if (/\bthank( you|s)\b/i.test(last)) {
+	if (
+		/\bthank( you|s)\b/i.test(last) ||
+		(lang !== 'en' && meta.thanksCloseRe.test(last))
+	) {
 		hits.push('thanks-close');
 	}
-	if (SIGNOFF_CLOSE_RES.some((re) => re.test(trimmed))) {
+	if (
+		SIGNOFF_CLOSE_RES.some((re) => re.test(trimmed)) ||
+		(lang !== 'en' && meta.signoffCloseRe.test(trimmed))
+	) {
 		hits.push('signoff-close');
 	}
 	return {
@@ -160,7 +176,7 @@ function wordTokens(s: string): string[] {
 	return s
 		.toLowerCase()
 		.split(/\s+/)
-		.map((w) => w.replace(/^[^a-z0-9{]+|[^a-z0-9}]+$/g, ''))
+		.map((w) => w.replace(/^[^\p{L}\p{N}{]+|[^\p{L}\p{N}}]+$/gu, ''))
 		.filter((w) => w.length > 0);
 }
 
@@ -394,6 +410,7 @@ export function validateExpansion(
 		pass: true,
 		detail: 'skipped for template render',
 	});
+	const lang: SupportedLang = input.lang ?? 'en';
 	const checks: CheckResult[] = [
 		{
 			name: 'completeness',
@@ -421,7 +438,7 @@ export function validateExpansion(
 		isTemplate
 			? skipped('no-role-reversal')
 			: checkNoRoleReversal(input.splicedIr, output, input.slotValues),
-		isTemplate ? skipped('no-greeting') : checkNoGreeting(output),
+		isTemplate ? skipped('no-greeting') : checkNoGreeting(output, lang),
 	];
 	const warnings: string[] = [];
 	if (!isTemplate) {

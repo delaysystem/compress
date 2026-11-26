@@ -76,12 +76,24 @@ Merge a trained adapter and export GGUF (CPU, fits 8GB RAM):
   LiquidAI/LFM3-1.7B vendor/models/lfm3-expand-lora-v13 vendor/models/merged-v13
 ```
 
-Serve (example — Vulkan build, speculative draft):
+Serve (default — flash attention on, reasoning off; `-rea off` is required
+or v13b generates to the token cap at ~110s/request):
 
 ```bash
-llama-server -m lfm3-expand-v13-q4km.gguf -md lfm25-230m-q40.gguf \
-  --port 9931 -c 2048 -ngl 99 -ctk q8_0 -ctv q8_0 --temp 0.0 -rea off --jinja
+worker/scripts/serve-expander.sh        # -rea off --jinja -fa on
+# equivalent: llama-server -m lfm3-expand-v13b-q4km.gguf \
+#   --port 9931 -c 2048 -ngl 99 --temp 0.0 -rea off --jinja -fa on
 ```
+
+Expansion prompts use the compact rules by default
+(`config.EXPANSION_PROMPT_MODE = 'compact'`, ~50 vs ~142 tokens); set it to
+`'full'` to restore the verbose rules. Flash attention (`-fa on`) and compact
+prompts are both default; speculative draft (`-md`), measured slower on CPU
+(8.3s vs 7.6s), is not.
+
+Measured expander p50 on 4 CPU cores: 7.6s baseline -> 6.8s `-fa on` ->
+6.0s compact. Full method table: `run-reports/034-latency-methods.md`.
+Re-run the controlled benchmark with `worker/scripts/latency-bench.ts`.
 
 ## Design invariants
 

@@ -7,9 +7,12 @@
 // fails fast with a line number (feeds the ladder repair path), never silently.
 // Slot values must not contain '|' (v0 limitation, enforced below).
 
+import { EXPANSION_PROMPT_MODE } from './config.ts';
 import { type Dictionary, decodeLine } from './dict.ts';
 import { extractEntities } from './entities.ts';
 import type { GenerateResult } from './gemini.ts';
+import { SUPPORTED_LANGUAGES, type SupportedLang } from './i18n.ts';
+import type { ChatMessage, ChatParams } from './openai.ts';
 
 /** Minimal structural surface the expander needs. Both provider clients
  * satisfy it (method bivariance); usage arrives in TokenUsage vocabulary
@@ -23,6 +26,11 @@ export interface ExpanderClient {
 			maxOutputTokens?: number;
 			extraBody?: Record<string, unknown>;
 		},
+	): Promise<GenerateResult>;
+	chat?(
+		model: string,
+		messages: ChatMessage[],
+		params?: ChatParams,
 	): Promise<GenerateResult>;
 }
 
@@ -266,11 +274,34 @@ const EXPANSION_RULES = [
  * parroted prompt words must neither inflate novelty nor smuggle entities. */
 export const ANCHOR_PREFIX = 'Must include these exact values:';
 
+/** Opt-in low-prefill variant (config.EXPANSION_PROMPT_MODE). Same rules,
+ * one line: ~50 prompt tokens vs ~142, measured ~20% lower expander p50. */
+export const COMPACT_EXPANSION_RULES = [
+	'You expand a telegraphic support-draft into one fluent customer reply.',
+	'Rules: say exactly what the draft says; copy every number, date, URL, name and quoted string character-exact; add no new facts; NEVER open with a greeting and NEVER close with a sign-off; output only the reply text.',
+].join(' ');
+
+function langInstruction(lang: SupportedLang): string | undefined {
+	if (lang === 'en') {
+		return undefined;
+	}
+	const meta = SUPPORTED_LANGUAGES[lang];
+	return `Write the reply in ${meta.name} (${meta.nativeName}).`;
+}
+
 export function buildExpansionPrompt(
 	expandedIr: string,
 	repairHint?: string,
+	compact = EXPANSION_PROMPT_MODE === 'compact',
+	lang: SupportedLang = 'en',
 ): string {
-	const parts = [EXPANSION_RULES, 'DRAFT:', expandedIr];
+	const rules = compact ? COMPACT_EXPANSION_RULES : EXPANSION_RULES;
+	const langLine = langInstruction(lang);
+	const parts = [
+		langLine === undefined ? rules : `${rules} ${langLine}`,
+		'DRAFT:',
+		expandedIr,
+	];
 	// Entity anchor (run 046): small models de-brace placeholders into prose
 	// ("your tracking number" for {{Tracking Number}}). Naming each draft
 	// entity as must-include flips LFM3 drops to clean (2/2) and is a no-op
@@ -285,6 +316,98 @@ export function buildExpansionPrompt(
 	}
 	parts.push('REPLY:');
 	return parts.join('\n');
+}
+
+export function buildExpansionMessages(
+	expandedIr: string,
+	repairHint?: string,
+	compact = EXPANSION_PROMPT_MODE === 'compact',
+	lang: SupportedLang = 'en',
+): ChatMessage[] {
+	const baseRules = compact ? COMPACT_EXPANSION_RULES : EXPANSION_RULES;
+	const langLine = langInstruction(lang);
+	const system =
+		langLine === undefined ? baseRules : `${baseRules} ${langLine}`;
+	const userParts = ['DRAFT:', expandedIr];
+	const raws = extractEntities(expandedIr).map((e) => e.raw);
+	if (raws.length > 0) {
+		userParts.push(`${ANCHOR_PREFIX} ${raws.join(', ')}.`);
+	}
+	if (repairHint !== undefined && repairHint.length > 0) {
+		userParts.push(`REPAIR: ${repairHint}`);
+	}
+	userParts.push('REPLY:');
+	return [
+		{ role: 'system', content: system },
+		{ role: 'user', content: userParts.join('\n') },
+	];
+}
+
+export function computeMaxOutputTokens(preparedIr: string): number {
+	const words = preparedIr
+		.trim()
+		.split(/\s+/)
+		.filter((w) => w.length > 0).length;
+	return Math.min(512, Math.max(96, Math.ceil(words * 3.5) + 32));
+}
+
+const GREETING_LEAD_RE =
+	/^(?:hi|hello|hey|greetings|good morning|good afternoon|good evening|thank you(?: for [^.!?\n]+)?|thanks(?: for [^.!?\n]+)?|dear(?: [^,!?\n]+)?)\s*[,!.:]?\s*/i;
+const SIGNOFF_TAIL_RE =
+	/(?:\n+\s*(?:best regards|sincerely|warm regards|kind regards|(?:customer )?support team)[\s\S]*$)/i;
+
+/** Deterministic framing-leak stripper for fastRepair when no-greeting fails.
+ * Supports English plus all 20 configured languages; never empties output. */
+export function stripFramingLeaks(
+	text: string,
+	lang: SupportedLang = 'en',
+): string {
+	let out = text.trim();
+	const afterLead = out.replace(GREETING_LEAD_RE, '').trim();
+	if (afterLead.length > 0) {
+		out = afterLead;
+	}
+	if (lang !== 'en') {
+		const meta = SUPPORTED_LANGUAGES[lang];
+		const langLead = out
+			.replace(meta.greetingOpenRe, '')
+			.replace(/^[,!.:،、，！。\s]+/, '')
+			.trim();
+		if (langLead.length > 0) {
+			out = langLead;
+		}
+	}
+	const afterSignoff = out.replace(SIGNOFF_TAIL_RE, '').trim();
+	if (afterSignoff.length > 0) {
+		out = afterSignoff;
+	}
+	if (lang !== 'en') {
+		const meta = SUPPORTED_LANGUAGES[lang];
+		const m = meta.signoffCloseRe.exec(out);
+		if (m !== null && m.index > 0) {
+			const before = out.slice(0, m.index).trim();
+			if (before.length > 0) {
+				out = before;
+			}
+		}
+	}
+	const sentences = out
+		.split(/(?<=[.!?…।。！？؟۔])\s*/)
+		.filter((s) => s.length > 0);
+	if (sentences.length > 1) {
+		const last = sentences[sentences.length - 1] ?? '';
+		const meta = SUPPORTED_LANGUAGES[lang];
+		if (
+			/\bthank( you|s)\b/i.test(last) ||
+			(lang !== 'en' && meta.thanksCloseRe.test(last))
+		) {
+			const withoutLast = sentences.slice(0, -1).join(meta.joiner).trim();
+			if (withoutLast.length > 0) {
+				out = withoutLast;
+			}
+		}
+	}
+	return out.length > 0 ? out : text.trim();
 }
 
 // Deliberation stripper (run 023): Qwen-class models deliberate in-band
@@ -384,15 +507,30 @@ export async function expand(
 	preparedIr: string,
 	repairHint?: string,
 	extraBody?: Record<string, unknown>,
+	lang: SupportedLang = 'en',
 ): Promise<GenerateResult> {
-	const prompt =
-		repairHint === undefined
-			? buildExpansionPrompt(preparedIr)
-			: buildExpansionPrompt(preparedIr, repairHint);
-	const result =
-		extraBody === undefined
-			? await client.generate(model, prompt)
-			: await client.generate(model, prompt, { extraBody });
+	const maxOutputTokens = computeMaxOutputTokens(preparedIr);
+	const params: ChatParams = {
+		temperature: 0,
+		maxOutputTokens,
+		...(extraBody === undefined ? {} : { extraBody }),
+	};
+	let result: GenerateResult;
+	if (client.chat !== undefined) {
+		const messages = buildExpansionMessages(
+			preparedIr,
+			repairHint,
+			undefined,
+			lang,
+		);
+		result = await client.chat(model, messages, params);
+	} else {
+		const prompt =
+			repairHint === undefined
+				? buildExpansionPrompt(preparedIr, undefined, undefined, lang)
+				: buildExpansionPrompt(preparedIr, repairHint, undefined, lang);
+		result = await client.generate(model, prompt, params);
+	}
 	// Strip deliberation before return so the ladder validates exactly what
 	// would ship (usage still counts generated tokens: honest cost accounting).
 	const stripped = stripThinkBlocks(stripHarmony(result.text));

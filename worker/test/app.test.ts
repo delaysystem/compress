@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type AppDeps, handleExpand, routeRequest } from '../src/app.ts';
+import { ExpansionCache } from '../src/cache.ts';
 import type { FetchFn } from '../src/gemini.ts';
 import { OpenAIChatClient } from '../src/openai.ts';
 
@@ -252,8 +253,122 @@ describe('routeRequest', () => {
 			req('/expand', { method: 'POST', body: JSON.stringify(BASE) }),
 		);
 		expect(res.status).toBe(200);
-		const j = (await res.json()) as { ok: boolean; path: string };
+		expect(res.headers.get('Server-Timing')).toContain('total;dur=');
+		const j = (await res.json()) as {
+			ok: boolean;
+			path: string;
+			timings?: { totalMs: number };
+		};
 		expect(j.ok).toBe(true);
 		expect(j.path).toBe('direct');
+		expect(typeof j.timings?.totalMs).toBe('number');
+	});
+
+	it('serves v3 code-only IR via Tier 1 fast-realizer without calling LLM', async () => {
+		const v3Dict = {
+			version: 'ir-v3',
+			entries: [
+				{ code: 'KA', template: 'Log in to account', slots: [] },
+				{ code: 'HA', template: 'Select {target}', slots: ['target'] },
+			],
+		};
+		const res = await handleExpand(
+			testDeps({
+				dicts: { 'ir-v3': v3Dict },
+				llm: undefined,
+			}),
+			{
+				ir: 'KA HA {{Settings}}',
+				dictVersion: 'ir-v3',
+				kbVersion: 'kb1',
+				model: 'auto',
+			},
+		);
+		expect(res.status).toBe(200);
+		const j = res.json as { ok: boolean; path: string; text: string };
+		expect(j.ok).toBe(true);
+		expect(j.path).toBe('fast-realizer');
+		expect(j.text).toContain('{{Settings}}');
+	});
+
+	it('serves repeat skeleton via Tier 2 cache and fixes greeting leaks deterministically', async () => {
+		const cache = new ExpansionCache(16);
+		let llmCalls = 0;
+		const fetchFn: FetchFn = () => {
+			llmCalls += 1;
+			return Promise.resolve({
+				ok: true,
+				status: 200,
+				statusText: 'OK',
+				body: null,
+				json: () =>
+					Promise.resolve({
+						choices: [
+							{
+								message: {
+									content:
+										'Hello! Your order W111 refund has been approved and processed.',
+								},
+								finish_reason: 'stop',
+							},
+						],
+					}),
+			});
+		};
+		const llm = new OpenAIChatClient({
+			apiKey: 'k',
+			baseUrl: 'https://x.test/v1',
+			fetchFn,
+		});
+		const deps = testDeps({ llm, cache });
+
+		// First call strips greeting leak deterministically without a 2nd LLM call.
+		const r1 = await handleExpand(deps, {
+			...BASE,
+			ir: 'Order W111 refund approved',
+			slotValues: ['W111'],
+			fastMode: true,
+		});
+		expect(r1.status).toBe(200);
+		expect(llmCalls).toBe(1);
+		const j1 = r1.json as { ok: boolean; path: string; text: string };
+		expect(j1.ok).toBe(true);
+		expect(j1.path).toBe('repaired');
+		expect(j1.text).not.toMatch(/^Hello/);
+
+		// Direct path stores in cache, second matching skeleton hits cache with 0 LLM calls.
+		const cacheDeps = testDeps({
+			llm: scriptedLlm(['Your order W111 refund is processed cleanly.']),
+			cache,
+		});
+		await handleExpand(cacheDeps, {
+			...BASE,
+			ir: 'Order W111 refund approved',
+			slotValues: ['W111'],
+			fastMode: true,
+		});
+		const r2 = await handleExpand(testDeps({ llm: undefined, cache }), {
+			...BASE,
+			ir: 'Order W999 refund approved',
+			slotValues: ['W999'],
+			fastMode: true,
+		});
+		expect(r2.status).toBe(200);
+		const j2 = r2.json as { ok: boolean; path: string; text: string };
+		expect(j2.path).toBe('cached');
+		expect(j2.text).toContain('W999');
+	});
+
+	it('serves /expand/stream as SSE delta + done events', async () => {
+		const res = await routeRequest(
+			testDeps(),
+			req('/expand/stream', { method: 'POST', body: JSON.stringify(BASE) }),
+		);
+		expect(res.status).toBe(200);
+		expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+		const body = await res.text();
+		expect(body).toContain('event: delta');
+		expect(body).toContain('event: done');
+		expect(body).toContain(CLEAN);
 	});
 });

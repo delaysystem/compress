@@ -1,32 +1,56 @@
 // Worker entry (production wiring). Secrets via env bindings (owner:
-// `wrangler secret put`). Dict: bundled versioned snapshot (v0; KV migration
-// is follow-up). Spans: SPAN_KV binding (unprovisioned until owner step ->
-// explicit 501 path, tested).
+// `wrangler secret put`). Dicts: bundled versioned snapshots (v0 + ir-v3)
+// plus marker-v3 alias table. LLM: multi-provider failover pool across
+// existing + 7 .dev.vars OpenAI-compatible providers. Spans: SPAN_KV binding
+// (unprovisioned until owner step -> explicit 501 path, tested).
+import dictV3Json from '../../data/derived/dict-ir-v3.json';
 import dictJson from '../../data/derived/dict-v0.json';
+import markerV3Json from '../../data/derived/marker-v3.json';
 import { type AppDeps, routeRequest } from './app.ts';
-import { NIM_BASE_URL } from './config.ts';
+import { ExpansionCache } from './cache.ts';
 import { type Dictionary, dictFromJson } from './dict.ts';
 import type { Env } from './env.ts';
-import { OpenAIChatClient } from './openai.ts';
+import { buildProviderPoolFromEnv } from './providers.ts';
 import { spanStoreFromJson } from './spanref.ts';
 
-let cachedDict: Dictionary | undefined;
+let cachedDicts:
+	| {
+			v0: Dictionary;
+			v3: Dictionary;
+			byVersion: Record<string, Dictionary>;
+			markers: Record<string, string>;
+	  }
+	| undefined;
 
-function getDict(): Dictionary {
-	if (cachedDict === undefined) {
-		cachedDict = dictFromJson(dictJson);
+const isolateCache = new ExpansionCache(512);
+
+function getDicts() {
+	if (cachedDicts === undefined) {
+		const v0 = dictFromJson(dictJson);
+		const v3 = dictFromJson(dictV3Json);
+		const markers = (markerV3Json as { aliases?: Record<string, string> })
+			.aliases;
+		cachedDicts = {
+			v0,
+			v3,
+			byVersion: {
+				[v0.version]: v0,
+				[v3.version]: v3,
+			},
+			markers: markers ?? {},
+		};
 	}
-	return cachedDict;
+	return cachedDicts;
 }
 
 function buildDeps(env: Env): AppDeps {
-	const apiKey = env.NIM_API_KEY;
+	const dicts = getDicts();
 	return {
-		dict: getDict(),
-		llm:
-			apiKey === undefined || apiKey.length === 0
-				? undefined
-				: new OpenAIChatClient({ apiKey, baseUrl: NIM_BASE_URL }),
+		dict: dicts.v0,
+		dicts: dicts.byVersion,
+		markers: dicts.markers,
+		cache: isolateCache,
+		llm: buildProviderPoolFromEnv(env, { hedgeAfterMs: 350 }),
 		loadSpans: async (kbVersion: string) => {
 			if (env.SPAN_KV === undefined) {
 				return { ok: false as const, reason: 'not-configured' as const };

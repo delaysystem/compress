@@ -248,6 +248,32 @@ describe('buildExpansionPrompt', () => {
 		expect(p).toContain('Must include these exact values: {{Website URL}}.');
 		expect(p.endsWith('REPLY:')).toBe(true);
 	});
+
+	it('defaults to compact rules', () => {
+		const p = buildExpansionPrompt('some draft');
+		expect(p).toBe(buildExpansionPrompt('some draft', undefined, true));
+		expect(p.length).toBeLessThan(
+			buildExpansionPrompt('some draft', undefined, false).length,
+		);
+	});
+
+	it('compact mode keeps rules, draft, anchor and repair hint', () => {
+		const p = buildExpansionPrompt(
+			'Visit {{Website URL}} today',
+			'fix x',
+			true,
+		);
+		expect(p).toContain('character-exact');
+		expect(p).toContain('NEVER open with a greeting');
+		expect(p).toContain('Visit {{Website URL}} today');
+		expect(p).toContain('Must include these exact values: {{Website URL}}.');
+		expect(p).toContain('REPAIR: fix x');
+		expect(p.endsWith('REPLY:')).toBe(true);
+		expect(p.length).toBeLessThan(
+			buildExpansionPrompt('Visit {{Website URL}} today', 'fix x', false)
+				.length,
+		);
+	});
 });
 
 describe('expand', () => {

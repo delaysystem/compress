@@ -5,6 +5,8 @@
 // normalize to the validator's vocabulary (STOP / MAX_TOKENS).
 
 import type { FetchFn, TokenUsage } from './gemini.ts';
+import { parseSseEvents } from './sse.ts';
+import { type OpenAIStreamChunk, openaiChunkToDeltas } from './streaming.ts';
 
 export interface ChatMessage {
 	role: 'system' | 'user' | 'assistant';
@@ -156,6 +158,57 @@ export class OpenAIChatClient {
 			}
 		}
 		return result;
+	}
+
+	async *chatStream(
+		model: string,
+		messages: ChatMessage[],
+		params?: ChatParams,
+	): AsyncGenerator<string> {
+		const body: Record<string, unknown> = { model, messages, stream: true };
+		if (params?.temperature !== undefined) {
+			body.temperature = params.temperature;
+		}
+		if (params?.maxOutputTokens !== undefined) {
+			body.max_tokens = params.maxOutputTokens;
+		}
+		if (params?.extraBody !== undefined) {
+			Object.assign(body, params.extraBody);
+		}
+		let res: Awaited<ReturnType<FetchFn>>;
+		try {
+			res = await this.fetchFn(`${this.baseUrl}/chat/completions`, {
+				method: 'POST',
+				headers: this.headers(),
+				body: JSON.stringify(body),
+				signal: AbortSignal.timeout(this.timeoutMs),
+			});
+		} catch (e) {
+			if (
+				e instanceof Error &&
+				(e.name === 'AbortError' || /timeout/i.test(e.name))
+			) {
+				throw new OpenAIError(408, 'request timed out');
+			}
+			throw e;
+		}
+		await this.throwIfError(res);
+		if (res.body === null) {
+			return;
+		}
+		for await (const payload of parseSseEvents(res.body)) {
+			let chunk: OpenAIStreamChunk;
+			try {
+				chunk = JSON.parse(payload) as OpenAIStreamChunk;
+			} catch {
+				continue;
+			}
+			for (const delta of openaiChunkToDeltas(chunk)) {
+				if (delta.kind === 'text' && delta.text.length > 0) {
+					yield delta.text;
+				}
+			}
+		}
 	}
 
 	private headers(): Record<string, string> {

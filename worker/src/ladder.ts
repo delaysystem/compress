@@ -5,6 +5,7 @@
 // (agents2.md Rule 2).
 
 import { REPAIR_ATTEMPTS } from './config.ts';
+import type { SupportedLang } from './i18n.ts';
 import {
 	type ExpansionCheckInput,
 	type ValidatorVerdict,
@@ -35,9 +36,23 @@ export interface LadderDeps {
 	 * callers; finetuned v12 follows REPAIR hints at 4/12, so keep
 	 * the default for finetuned callers). */
 	repairAttempts?: number;
+	/** Skip the 2nd SLM call when v1 passes all 8 blocking checks and only
+	 * carries a non-blocking terse-mirror style warning. Default false. */
+	skipStyleRepair?: boolean;
+	/** Deterministic pre-repair (e.g. stripping greeting/signoff leaks) run
+	 * before spending a 2nd LLM call. Returning null skips deterministic repair. */
+	fastRepair?: (output: string, verdict: ValidatorVerdict) => string | null;
+	/** Target language for validation heuristics. Default 'en'. */
+	lang?: SupportedLang;
 }
 
 export type LadderPath = 'direct' | 'repaired' | 'template';
+
+export interface LadderTimings {
+	llmMs: number;
+	validateMs: number;
+	repairMs: number;
+}
 
 export interface LadderResult {
 	/** Caller must check: false means serve-with-caution/escalate, never silent ship. */
@@ -46,6 +61,7 @@ export interface LadderResult {
 	path: LadderPath;
 	verdicts: ValidatorVerdict[];
 	usage: AttemptUsage | null;
+	timings?: LadderTimings;
 }
 
 export function buildRepairHint(verdict: ValidatorVerdict): string {
@@ -74,6 +90,7 @@ function check(
 	slotValues: string[],
 	attempt: ExpansionAttempt,
 	source?: 'model' | 'template',
+	lang?: SupportedLang,
 ): ValidatorVerdict {
 	const input: ExpansionCheckInput = {
 		splicedIr: preparedIr,
@@ -81,6 +98,7 @@ function check(
 		output: attempt.text,
 		finishReason: attempt.finishReason,
 		...(source === undefined ? {} : { source }),
+		...(lang === undefined ? {} : { lang }),
 	};
 	return validateExpansion(input);
 }
@@ -91,6 +109,9 @@ export async function runLadder(
 ): Promise<LadderResult> {
 	const verdicts: ValidatorVerdict[] = [];
 	const usages: AttemptUsage[] = [];
+	let llmMs = 0;
+	let validateMs = 0;
+	let repairMs = 0;
 	const observe = (attempt: ExpansionAttempt): void => {
 		if (attempt.usage !== null) {
 			usages.push(attempt.usage);
@@ -104,18 +125,25 @@ export async function runLadder(
 					candidatesTokens: usages.reduce((s, u) => s + u.candidatesTokens, 0),
 					totalTokens: usages.reduce((s, u) => s + u.totalTokens, 0),
 				};
+	const timings = (): LadderTimings => ({ llmMs, validateMs, repairMs });
 
+	const tLlm0 = performance.now();
 	const first = await deps.expandPrepared(preparedIr);
+	llmMs += performance.now() - tLlm0;
 	observe(first);
-	const v1 = check(preparedIr, deps.slotValues, first);
+
+	const tVal0 = performance.now();
+	const v1 = check(preparedIr, deps.slotValues, first, undefined, deps.lang);
+	validateMs += performance.now() - tVal0;
 	verdicts.push(v1);
-	if (v1.pass && !hasStyleWarning(v1)) {
+	if (v1.pass && (!hasStyleWarning(v1) || deps.skipStyleRepair === true)) {
 		return {
 			ok: true,
 			text: first.text,
 			path: 'direct',
 			verdicts,
 			usage: summed(),
+			timings: timings(),
 		};
 	}
 	if (v1.pass) {
@@ -124,12 +152,20 @@ export async function runLadder(
 		// terser text, so it is never used here).
 		const attempts = deps.repairAttempts ?? REPAIR_ATTEMPTS;
 		if (attempts > 0) {
+			const tRep0 = performance.now();
 			const repair = await deps.expandPrepared(
 				preparedIr,
 				buildStyleHint(v1.warnings ?? []),
 			);
 			observe(repair);
-			const vRepair = check(preparedIr, deps.slotValues, repair);
+			const vRepair = check(
+				preparedIr,
+				deps.slotValues,
+				repair,
+				undefined,
+				deps.lang,
+			);
+			repairMs += performance.now() - tRep0;
 			verdicts.push(vRepair);
 			if (vRepair.pass && !hasStyleWarning(vRepair)) {
 				return {
@@ -138,6 +174,7 @@ export async function runLadder(
 					path: 'repaired',
 					verdicts,
 					usage: summed(),
+					timings: timings(),
 				};
 			}
 		}
@@ -147,18 +184,53 @@ export async function runLadder(
 			path: 'direct',
 			verdicts,
 			usage: summed(),
+			timings: timings(),
 		};
+	}
+
+	// Deterministic pre-repair (e.g. greeting/signoff leak strip) before spending
+	// a 2nd LLM call: zero network latency when it resolves the failing check.
+	if (deps.fastRepair !== undefined) {
+		const tFastRep0 = performance.now();
+		const fixedText = deps.fastRepair(first.text, v1);
+		if (fixedText !== null && fixedText !== first.text) {
+			const vFast = check(
+				preparedIr,
+				deps.slotValues,
+				{
+					text: fixedText,
+					finishReason: first.finishReason,
+					usage: null,
+				},
+				undefined,
+				deps.lang,
+			);
+			repairMs += performance.now() - tFastRep0;
+			verdicts.push(vFast);
+			if (vFast.pass) {
+				return {
+					ok: true,
+					text: fixedText,
+					path: 'repaired',
+					verdicts,
+					usage: summed(),
+					timings: timings(),
+				};
+			}
+		}
 	}
 
 	let last = v1;
 	const attempts = deps.repairAttempts ?? REPAIR_ATTEMPTS;
 	for (let i = 0; i < attempts; i++) {
+		const tRep0 = performance.now();
 		const attempt = await deps.expandPrepared(
 			preparedIr,
 			buildRepairHint(last),
 		);
 		observe(attempt);
-		last = check(preparedIr, deps.slotValues, attempt);
+		last = check(preparedIr, deps.slotValues, attempt, undefined, deps.lang);
+		repairMs += performance.now() - tRep0;
 		verdicts.push(last);
 		if (last.pass) {
 			return {
@@ -167,12 +239,14 @@ export async function runLadder(
 				path: 'repaired',
 				verdicts,
 				usage: summed(),
+				timings: timings(),
 			};
 		}
 	}
 
 	// Template render involves no model: null finish reason (text heuristics only).
 	// It is verbatim by design, so the model-only checks are skipped.
+	const tTmpl0 = performance.now();
 	const rendered = deps.templateRender(preparedIr);
 	const vTemplate = check(
 		preparedIr,
@@ -183,7 +257,9 @@ export async function runLadder(
 			usage: null,
 		},
 		'template',
+		deps.lang,
 	);
+	validateMs += performance.now() - tTmpl0;
 	verdicts.push(vTemplate);
 	if (vTemplate.pass) {
 		return {
@@ -192,6 +268,7 @@ export async function runLadder(
 			path: 'template',
 			verdicts,
 			usage: summed(),
+			timings: timings(),
 		};
 	}
 	return {
@@ -200,5 +277,6 @@ export async function runLadder(
 		path: 'template',
 		verdicts,
 		usage: summed(),
+		timings: timings(),
 	};
 }

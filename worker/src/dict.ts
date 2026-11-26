@@ -23,11 +23,23 @@ export type DecodeResult =
 // (rule: copy markers exact, inside slots too) and must not trip this.
 const LEFTOVER_RE = /(?<!\{)\{[^{}]*\}(?!\})/;
 
+const ENTRY_INDEX_CACHE = new WeakMap<Dictionary, Map<string, DictEntry>>();
+
 export function findEntry(
 	dict: Dictionary,
 	code: string,
 ): DictEntry | undefined {
-	return dict.entries.find((e) => e.code === code);
+	let idx = ENTRY_INDEX_CACHE.get(dict);
+	if (idx === undefined) {
+		idx = new Map<string, DictEntry>();
+		for (const e of dict.entries) {
+			if (!idx.has(e.code)) {
+				idx.set(e.code, e);
+			}
+		}
+		ENTRY_INDEX_CACHE.set(dict, idx);
+	}
+	return idx.get(code);
 }
 
 /** Render dictionary entries as emit-prompt codebook lines. Slot order in

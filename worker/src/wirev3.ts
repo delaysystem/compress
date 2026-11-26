@@ -32,14 +32,35 @@ export function escapeV3Word(word: string, codes: Set<string>): string {
 interface RestoreTables {
 	aliases: Record<string, string>;
 	inners: Record<string, string>;
+	byMarker: Record<string, string>;
+}
+
+const CODES_CACHE = new WeakMap<Dictionary, Set<string>>();
+const RESTORE_CACHE = new WeakMap<Record<string, string>, RestoreTables>();
+
+function getCodeSet(dict: Dictionary): Set<string> {
+	let codes = CODES_CACHE.get(dict);
+	if (codes === undefined) {
+		codes = new Set(dict.entries.map((e) => e.code));
+		CODES_CACHE.set(dict, codes);
+	}
+	return codes;
 }
 
 function buildRestore(markers: Record<string, string>): RestoreTables {
-	const inners: Record<string, string> = {};
-	for (const marker of Object.values(markers)) {
-		inners[marker.slice(2, -2).toLowerCase()] = marker;
+	const cached = RESTORE_CACHE.get(markers);
+	if (cached !== undefined) {
+		return cached;
 	}
-	return { aliases: markers, inners };
+	const inners: Record<string, string> = {};
+	const byMarker: Record<string, string> = {};
+	for (const [form, marker] of Object.entries(markers)) {
+		inners[marker.slice(2, -2).toLowerCase()] = marker;
+		byMarker[marker] = form;
+	}
+	const tables: RestoreTables = { aliases: markers, inners, byMarker };
+	RESTORE_CACHE.set(markers, tables);
+	return tables;
 }
 
 const WRAP_RE = /^([^A-Za-z0-9]*)([A-Za-z0-9]+)([^A-Za-z0-9]*)$/;
@@ -102,7 +123,7 @@ export function parseV3(
 	dict: Dictionary,
 	markers: Record<string, string>,
 ): V3Segment[] {
-	const codes = new Set(dict.entries.map((e) => e.code));
+	const codes = getCodeSet(dict);
 	const restore = buildRestore(markers);
 	const words = irText.split(/\s+/).filter((w) => w.length > 0);
 	if (!words.some((w) => codes.has(w))) {
@@ -256,10 +277,7 @@ export function autofixV3(
 	};
 	// Inverse table: verbatim marker -> smashed form. Compresses what the
 	// model wrote long; decode restores byte-exact, so recall-neutral.
-	const byMarker: Record<string, string> = {};
-	for (const [form, marker] of Object.entries(markers)) {
-		byMarker[marker] = form;
-	}
+	const { byMarker } = buildRestore(markers);
 	const normalize = (text: string): string =>
 		text
 			.replace(/\{\{([^{}]+)\}\}/g, (m) =>
