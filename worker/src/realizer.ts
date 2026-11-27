@@ -1,10 +1,15 @@
 // Tier 1 sub-millisecond deterministic fluent realizer for Wire v3 IR.
-// Supports all 20 most spoken languages across all 46 dict-ir-v3 codes with
-// zero LLM calls, gated by the full 8-check validateExpansion() contract.
+// Supports all 20 most spoken languages across all 46 dict-ir-v3 codes PLUS
+// deterministic fluent realization of concise TX / TEXT segments, gated by
+// the full 8-check validateExpansion() contract.
 
 import { SKIP_EXPANSION_TOKENS } from './config.ts';
 import { type Dictionary, findEntry } from './dict.ts';
-import { SUPPORTED_LANGUAGES, type SupportedLang } from './i18n.ts';
+import {
+	SUPPORTED_LANGUAGES,
+	type SupportedLang,
+	TX_DETAIL_PREFIX,
+} from './i18n.ts';
 import { FLUENT_TEMPLATES_BY_LANG } from './i18n-templates.ts';
 import { type ValidatorVerdict, validateExpansion } from './validator.ts';
 import type { V3Segment } from './wirev3.ts';
@@ -12,6 +17,9 @@ import type { V3Segment } from './wirev3.ts';
 /** English fluent templates (re-exported for backwards compatibility). */
 export const FLUENT_V3_TEMPLATES: Record<string, string> =
 	FLUENT_TEMPLATES_BY_LANG.en;
+
+const EN_IMPERATIVE_RE =
+	/^(?:provide|proceed|enter|click|check|verify|select|submit|contact|confirm|review|update|switch|navigate|open|use|visit|follow|send|share|include|type|scroll|locate|find|go|reset|change|cancel|track|view|log|sign)\b/i;
 
 function glueRatio(text: string, lang: SupportedLang): number {
 	const meta = SUPPORTED_LANGUAGES[lang];
@@ -71,6 +79,33 @@ function ensureSentence(text: string, lang: SupportedLang): string {
 		: `${capped}${meta.sentenceEnd}`;
 }
 
+function lowerFirstAscii(text: string): string {
+	if (text.length === 0 || text.startsWith('{{') || text.startsWith('http')) {
+		return text;
+	}
+	const first = text[0] ?? '';
+	const second = text[1] ?? '';
+	// Keep acronyms (PIN, URL, ID) uppercase.
+	if (/[A-Z]/.test(first) && /[A-Z]/.test(second)) {
+		return text;
+	}
+	return `${first.toLowerCase()}${text.slice(1)}`;
+}
+
+function realizeFreeText(text: string, lang: SupportedLang): string {
+	const t = text.trim();
+	const wc = wordCount(t, lang);
+	if (wc >= 5 && glueRatio(t, lang) >= 0.2) {
+		return ensureSentence(t, lang);
+	}
+	if (lang === 'en' && EN_IMPERATIVE_RE.test(t)) {
+		return ensureSentence(`Please ${lowerFirstAscii(t)}`, lang);
+	}
+	const prefix = TX_DETAIL_PREFIX[lang];
+	const sep = SUPPORTED_LANGUAGES[lang].cjk ? '' : ' ';
+	return ensureSentence(`${prefix}${sep}${t}`, lang);
+}
+
 function fillFluentTemplate(
 	template: string,
 	slotNames: string[],
@@ -89,7 +124,8 @@ function fillFluentTemplate(
 }
 
 /** Realize parsed Wire v3 segments into fluent prose in any of the 20 supported languages.
- * Returns null if any segment requires LLM fluency (non-fluent TX/text or unknown code). */
+ * Handles all 46 dict-ir-v3 codes plus concise/mixed TX & TEXT segments deterministically.
+ * Returns null only for long (>SKIP_EXPANSION_TOKENS) code-less free-text blobs or unknown codes. */
 export function realizeV3Segments(
 	segments: V3Segment[],
 	dict: Dictionary,
@@ -100,6 +136,9 @@ export function realizeV3Segments(
 	}
 	const templates = FLUENT_TEMPLATES_BY_LANG[lang];
 	const meta = SUPPORTED_LANGUAGES[lang];
+	const hasCodedSegment = segments.some(
+		(s) => s.kind === 'code' && s.code !== 'TX',
+	);
 	const sentences: string[] = [];
 	let totalTextWords = 0;
 
@@ -109,12 +148,11 @@ export function realizeV3Segments(
 			if (t.length === 0) {
 				continue;
 			}
-			const wc = wordCount(t, lang);
-			totalTextWords += wc;
-			if (totalTextWords > SKIP_EXPANSION_TOKENS || glueRatio(t, lang) < 0.25) {
+			totalTextWords += wordCount(t, lang);
+			if (!hasCodedSegment && totalTextWords > SKIP_EXPANSION_TOKENS) {
 				return null;
 			}
-			sentences.push(ensureSentence(t, lang));
+			sentences.push(realizeFreeText(t, lang));
 			continue;
 		}
 
@@ -123,12 +161,11 @@ export function realizeV3Segments(
 			if (t.length === 0) {
 				continue;
 			}
-			const wc = wordCount(t, lang);
-			totalTextWords += wc;
-			if (totalTextWords > SKIP_EXPANSION_TOKENS || glueRatio(t, lang) < 0.25) {
+			totalTextWords += wordCount(t, lang);
+			if (!hasCodedSegment && totalTextWords > SKIP_EXPANSION_TOKENS) {
 				return null;
 			}
-			sentences.push(ensureSentence(t, lang));
+			sentences.push(realizeFreeText(t, lang));
 			continue;
 		}
 

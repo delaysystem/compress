@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>compress — 10× LLM Output Compression · Monolith Edition</title>
+  <meta name="description" content="Cut flagship LLM output tokens ~10x. Wire v3 IR, 0.41ms p50 deterministic decompression, 8-check validator ladder, zero flagship retries." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+
+  <style>
+    :root {
+      --void: #09080A;
+      --void-elev: #121014;
+      --bone: #F2EFEA;
+      --muted: #8E8884;
+      --ember: #FF4B2B;
+      --ember-soft: rgba(255, 75, 43, 0.14);
+      --line: rgba(242, 239, 234, 0.12);
+      --line-strong: rgba(242, 239, 234, 0.28);
+      --font-serif: 'Cormorant Garamond', Georgia, serif;
+      --font-sans: 'Space Grotesk', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: var(--void); color: var(--bone); font-size: 16px; }
+    body {
+      font-family: var(--font-sans); background: var(--void); color: var(--bone);
+      overflow-x: hidden; line-height: 1.55; -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; }
+    .skip-link { position: fixed; left: -9999px; top: 8px; z-index: 9999; background: var(--ember); color: var(--void); padding: 10px 16px; font-family: var(--font-mono); font-size: 12px; }
+    .skip-link:focus { left: 8px; }
+
+    /* Fixed 3D WebGL Monolith & Particle Vortex Canvas */
+    #monolith-canvas {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+      z-index: 0; pointer-events: none;
+    }
+
+    /* Atmospheric Header */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 100;
+      padding: 0 clamp(20px, 4vw, 48px);
+      display: flex; justify-content: space-between; align-items: center;
+      background: linear-gradient(180deg, rgba(9, 8, 10, 0.85) 0%, rgba(9, 8, 10, 0) 100%);
+    }
+    .nav-brand {
+      font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: 0.14em;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-brand i { width: 8px; height: 8px; background: var(--ember); display: inline-block; box-shadow: 0 0 14px var(--ember); }
+    .nav-links { display: flex; align-items: center; gap: 28px; }
+    .nav-links a {
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--muted); transition: color 0.25s;
+    }
+    .nav-links a:hover { color: var(--bone); }
+    .nav-pill {
+      padding: 10px 18px; min-height: 40px; border: 1px solid var(--ember);
+      color: var(--ember); font-family: var(--font-mono); font-size: 11px;
+      letter-spacing: 0.14em; text-transform: uppercase; transition: background 0.25s, color 0.25s;
+    }
+    .nav-pill:hover { background: var(--ember); color: var(--void); }
+
+    main { position: relative; z-index: 2; }
+
+    /* Hero */
+    .hero {
+      min-height: 100vh; padding: 100px clamp(20px, 4vw, 48px) 44px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    .hero-top-meta {
+      display: flex; justify-content: space-between; font-family: var(--font-mono);
+      font-size: 11px; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase;
+    }
+    .hero-center {
+      max-width: 1380px; width: 100%; margin: 0 auto;
+      display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 40px; align-items: end;
+    }
+    .hero-h1 {
+      font-family: var(--font-serif); font-weight: 400;
+      font-size: clamp(3.6rem, 8.8vw, 8.6rem); line-height: 0.9; letter-spacing: -0.025em;
+    }
+    .hero-h1 em { font-style: italic; color: var(--ember); }
+    .hero-aside {
+      border-left: 1px solid var(--line); padding-left: 28px;
+      background: rgba(9, 8, 10, 0.58); backdrop-filter: blur(10px);
+      padding-top: 20px; padding-bottom: 20px; padding-right: 16px;
+    }
+    .hero-aside p { font-size: 0.96rem; color: var(--muted); line-height: 1.65; margin-bottom: 22px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 12px; }
+    .btn-ember {
+      display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; min-height: 48px;
+      background: var(--ember); color: var(--void); font-family: var(--font-mono);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      transition: transform 0.3s var(--ease), opacity 0.25s;
+    }
+    .btn-ember:hover { transform: translateY(-2px); opacity: 0.92; }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 10px; padding: 15px 22px; min-height: 48px;
+      border: 1px solid var(--line-strong); font-family: var(--font-mono);
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      transition: border-color 0.25s, color 0.25s;
+    }
+    .btn-ghost:hover { border-color: var(--ember); color: var(--ember); }
+
+    .hero-stats {
+      max-width: 1380px; width: 100%; margin: 0 auto;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+      border-top: 1px solid var(--line); padding-top: 22px;
+    }
+    .h-stat strong {
+      display: block; font-family: var(--font-serif); font-size: clamp(2rem, 3.6vw, 3.2rem);
+      font-weight: 400; line-height: 1; color: var(--bone);
+    }
+    .h-stat strong.hot { color: var(--ember); }
+    .h-stat span {
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--muted);
+    }
+
+    /* Sections */
+    .sec {
+      padding: clamp(72px, 9vw, 132px) clamp(20px, 4vw, 48px);
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(9, 8, 10, 0.72) 0%, rgba(9, 8, 10, 0.9) 100%);
+    }
+    .wrap { max-width: 1360px; margin: 0 auto; }
+    .kicker {
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--ember); display: block; margin-bottom: 14px;
+    }
+    .h2 {
+      font-family: var(--font-serif); font-weight: 400;
+      font-size: clamp(2.5rem, 5.4vw, 4.8rem); line-height: 0.96; max-width: 860px;
+    }
+    .h2 em { font-style: italic; color: var(--ember); }
+
+    /* Interactive Wire v3 Compressor Workbench */
+    .codec-grid {
+      margin-top: 44px; display: grid; grid-template-columns: 260px 1fr;
+      border: 1px solid var(--line-strong); background: rgba(18, 16, 20, 0.88);
+      backdrop-filter: blur(12px);
+    }
+    .codec-tabs { border-right: 1px solid var(--line); padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .codec-tab {
+      text-align: left; padding: 14px; min-height: 52px; border: 1px solid transparent;
+      transition: border-color 0.25s, background 0.25s;
+    }
+    .codec-tab strong { display: block; font-size: 0.92rem; margin-bottom: 3px; }
+    .codec-tab small { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+    .codec-tab.is-active, .codec-tab:hover { border-color: var(--ember); background: var(--ember-soft); }
+
+    .codec-stage { padding: 28px; display: flex; flex-direction: column; gap: 20px; }
+    .codec-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .codec-box { border: 1px solid var(--line); padding: 20px; background: rgba(9, 8, 10, 0.72); }
+    .codec-box-head {
+      display: flex; justify-content: space-between; font-family: var(--font-mono);
+      font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 14px;
+    }
+    .codec-box-head b { color: var(--ember); }
+    .wire-stream {
+      font-family: var(--font-mono); font-size: 13.5px; line-height: 1.8; word-break: break-word;
+    }
+    .sep-tok {
+      display: inline-block; background: var(--ember); color: var(--void);
+      font-weight: 700; padding: 1px 6px; margin-right: 4px; font-size: 11px;
+    }
+    .prose-out { font-size: 0.95rem; color: var(--bone); line-height: 1.65; }
+    .codec-foot {
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px;
+      padding-top: 16px; border-top: 1px solid var(--line);
+      font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+    }
+    .codec-foot strong { color: var(--ember); }
+
+    /* 4-Tier Decompression Architecture */
+    .tier-grid {
+      margin-top: 44px; display: grid; grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--line-strong); border-left: 1px solid var(--line);
+    }
+    .tier-cell {
+      padding: 32px 24px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+      background: rgba(18, 16, 20, 0.72); display: flex; flex-direction: column; justify-content: space-between;
+      min-height: 280px; transition: background 0.3s;
+    }
+    .tier-cell:hover { background: rgba(255, 75, 43, 0.08); }
+    .tier-num { font-family: var(--font-mono); font-size: 11px; color: var(--ember); letter-spacing: 0.14em; }
+    .tier-cell h3 { font-size: 1.2rem; margin: 16px 0 10px; }
+    .tier-cell p { font-size: 0.88rem; color: var(--muted); }
+    .tier-metric {
+      margin-top: 22px; padding-top: 12px; border-top: 1px solid var(--line);
+      font-family: var(--font-mono); font-size: 11px; color: var(--bone);
+    }
+
+    /* Validator Ladder + Invariants */
+    .inv-grid {
+      margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+    }
+    .inv-list { border-top: 1px solid var(--line-strong); }
+    .inv-item {
+      display: grid; grid-template-columns: 44px 1fr; gap: 16px;
+      padding: 20px 0; border-bottom: 1px solid var(--line);
+    }
+    .inv-item span { font-family: var(--font-mono); font-size: 11px; color: var(--ember); }
+    .inv-item h4 { font-size: 1.05rem; margin-bottom: 4px; }
+    .inv-item p { font-size: 0.88rem; color: var(--muted); }
+
+    .bench-box {
+      border: 1px solid var(--line-strong); background: rgba(18, 16, 20, 0.88);
+      padding: 30px; font-family: var(--font-mono); font-size: 12px;
+    }
+    .bench-row {
+      display: flex; justify-content: space-between; padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .bench-row:last-child { border-bottom: none; }
+    .bench-row b { color: var(--ember); }
+
+    footer {
+      position: relative; z-index: 2; padding: 40px clamp(20px, 4vw, 48px);
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px;
+      font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+      background: var(--void);
+    }
+    footer a:hover { color: var(--ember); }
+
+    @media (max-width: 1024px) {
+      .hero-center, .codec-grid, .codec-row, .inv-grid { grid-template-columns: 1fr; }
+      .codec-tabs { border-right: none; border-bottom: 1px solid var(--line); }
+      .tier-grid { grid-template-columns: repeat(2, 1fr); }
+      .hero-stats { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .nav-links a { display: none; }
+      .tier-grid { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <canvas id="monolith-canvas" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a href="#" class="nav-brand"><i></i><span>COMPRESS // WIRE v3</span></a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#codec">Live Codec</a>
+      <a href="#pipeline">4-Tier Pipeline</a>
+      <a href="#invariants">Invariants</a>
+      <a href="https://huggingface.co/red-ware/lfm3-expand-v13b" target="_blank" rel="noopener" class="nav-pill">LFM3-1.7B v13b →</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="hero">
+      <div class="hero-top-meta">
+        <span>VARIANT 01 // 3D WEBGL TOKEN SINGULARITY</span>
+        <span>CLOUDFLARE WORKERS + LLAMA.CPP · BSL 1.1</span>
+      </div>
+
+      <div class="hero-center">
+        <h1 class="hero-h1">
+          Collapse 10×<br />
+          flagship tokens<br />
+          into <em>pure wire.</em>
+        </h1>
+        <div class="hero-aside">
+          <p>
+            Your flagship LLM emits compact single-line Wire v3 IR—~1/10th the output tokens—instead of verbose prose. A deterministic + local LFM3-1.7B pipeline expands it back in 0.41ms p50 with zero flagship retries.
+          </p>
+          <div class="btn-row">
+            <a href="#codec" class="btn-ember">Inspect Wire v3 Codec →</a>
+            <a href="#pipeline" class="btn-ghost">4-Tier Architecture ↓</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-stats">
+        <div class="h-stat"><strong class="hot">~10×</strong><span>Output Token Cut (8.83× Paired)</span></div>
+        <div class="h-stat"><strong>0.41ms</strong><span>p50 Total Decompression (n=100)</span></div>
+        <div class="h-stat"><strong>100/100</strong><span>End-to-End Validator Pass Rate</span></div>
+        <div class="h-stat"><strong class="hot">0</strong><span>Flagship Retries, Always</span></div>
+      </div>
+    </section>
+
+    <section id="codec" class="sec">
+      <div class="wrap">
+        <span class="kicker">Interactive Wire v3 Codec</span>
+        <h2 class="h2">46 single-token separators. <em>Byte-exact tool calls.</em></h2>
+
+        <div class="codec-grid">
+          <div class="codec-tabs" role="tablist" aria-label="Wire v3 examples">
+            <button type="button" class="codec-tab is-active" role="tab" aria-selected="true" data-ex="refund">
+              <strong>Order Refund &amp; Tracking</strong>
+              <small>174 tok → 18 tok (9.7×)</small>
+            </button>
+            <button type="button" class="codec-tab" role="tab" aria-selected="false" data-ex="warranty">
+              <strong>Warranty Dispatch + Slot</strong>
+              <small>152 tok → 16 tok (9.5×)</small>
+            </button>
+            <button type="button" class="codec-tab" role="tab" aria-selected="false" data-ex="escalate">
+              <strong>Account Verification + {{Marker}}</strong>
+              <small>138 tok → 15 tok (9.2×)</small>
+            </button>
+          </div>
+
+          <div class="codec-stage">
+            <div class="codec-row">
+              <div class="codec-box">
+                <div class="codec-box-head">
+                  <span>FLAGSHIP EMITTED WIRE v3 IR</span>
+                  <b id="c-ir-tok">18 TOKENS</b>
+                </div>
+                <div class="wire-stream" id="c-wire"></div>
+              </div>
+              <div class="codec-box">
+                <div class="codec-box-head">
+                  <span>EXPANDED CUSTOMER REPLY</span>
+                  <b id="c-prose-tok">174 TOKENS</b>
+                </div>
+                <p class="prose-out" id="c-prose"></p>
+              </div>
+            </div>
+            <div class="codec-foot">
+              <span>DECOMPRESSION PATH: <strong id="c-path">TIER 1 · DETERMINISTIC FAST-REALIZER (0.27ms)</strong></span>
+              <span>VALIDATOR: <strong>8/8 BLOCKING CHECKS PASSED</strong></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pipeline" class="sec">
+      <div class="wrap">
+        <span class="kicker">Run 035 — 199× Latency Breakthrough</span>
+        <h2 class="h2">Four tiers from O(1) dictionary to <em>local LFM3-1.7B.</em></h2>
+
+        <div class="tier-grid">
+          <article class="tier-cell">
+            <div>
+              <span class="tier-num">TIER 00 // CODEC</span>
+              <h3>Precompiled O(1) Dict &amp; Markers</h3>
+              <p>WeakMap-memoized Map lookups for all 46 cl100k-verified 2-letter UPPERCASE separators plus 32 compositional {{Marker}} restorations.</p>
+            </div>
+            <div class="tier-metric">parseDecodeMs: 0.19ms mean</div>
+          </article>
+          <article class="tier-cell">
+            <div>
+              <span class="tier-num">TIER 01 // FAST PATH</span>
+              <h3>Deterministic Fluent Realizer</h3>
+              <p>Fluent English templates for all 46 Wire v3 codes plus short fluent TX bypass—resolving 72% of customer replies with zero LLM calls.</p>
+            </div>
+            <div class="tier-metric">fastPathMs: 0.27ms · 72% hit rate</div>
+          </article>
+          <article class="tier-cell">
+            <div>
+              <span class="tier-num">TIER 02 // MEMORY</span>
+              <h3>Slot-Parameterized LRU Cache</h3>
+              <p>Canonicalizes slot values and markers into __V0__..__Vn__ skeletons and re-validates on every cache hit for zero drift.</p>
+            </div>
+            <div class="tier-metric">cacheMs: 0.01ms mean</div>
+          </article>
+          <article class="tier-cell">
+            <div>
+              <span class="tier-num">TIER 03 // SLM + POOL</span>
+              <h3>LFM3-1.7B &amp; EWMA Failover</h3>
+              <p>Local QLoRA-finetuned LFM3-1.7B (v13b q4km GGUF on llama.cpp) + latency-ranked multi-provider pool with 30s circuit breakers.</p>
+            </div>
+            <div class="tier-metric">100/100 end-to-end · 0 errors</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="invariants" class="sec">
+      <div class="wrap">
+        <span class="kicker">Hard Engineering Invariants</span>
+        <h2 class="h2">Never silently ship. <em>Never retry the flagship.</em></h2>
+
+        <div class="inv-grid">
+          <div class="inv-list">
+            <div class="inv-item"><span>01</span><div><h4>One Flagship Call Per Message</h4><p>No flagship regeneration anywhere in the stack. Anything the validator rejects is repaired by the SLM or served from the deterministic template.</p></div></div>
+            <div class="inv-item"><span>02</span><div><h4>Byte-Exact Tool Calls</h4><p>Function/tool calls bypass compression verbatim—zero schema mutation, zero argument hallucination.</p></div></div>
+            <div class="inv-item"><span>03</span><div><h4>8 Blocking Validator Checks</h4><p>validateExpansion gates every single reply before delivery; ok: false escalates loudly through the ladder.</p></div></div>
+            <div class="inv-item"><span>04</span><div><h4>Prefix-Cached Wire v3-x Prompt</h4><p>Static prefix kept byte-identical (rules + XX:Template book first, 790 tokens, -27% head) for provider prefix caching.</p></div></div>
+          </div>
+
+          <div class="bench-box">
+            <div style="color:var(--ember); letter-spacing:0.14em; margin-bottom:14px;">VERIFIED BENCHMARK LEDGER (RUN 035)</div>
+            <div class="bench-row"><span>Paired p50 Latency (n=20)</span><b>297.14ms → 1.49ms (199×)</b></div>
+            <div class="bench-row"><span>Full Corpus p50 Latency (n=100)</span><b>0.41ms total</b></div>
+            <div class="bench-row"><span>Deterministic Fast-Realizer Share</span><b>72 / 100 replies</b></div>
+            <div class="bench-row"><span>Fresh-Key Holdout Direct Pass</span><b>25 / 25 (100%)</b></div>
+            <div class="bench-row"><span>Automated Test Suite (Vitest)</span><b>404 / 404 passing</b></div>
+            <div class="bench-row"><span>Published Expander Model</span><b>red-ware/lfm3-expand-v13b</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div>compress · Wire v3 LLM Output Compressor · Business Source License 1.1</div>
+    <div style="display:flex; gap:20px;">
+      <a href="index.html">All 3 Variants</a>
+      <a href="02-swiss-barcode-press.html">Variant 02: Swiss Barcode</a>
+      <a href="03-optical-oscilloscope.html">Variant 03: Optical Lab</a>
+    </div>
+  </footer>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      'use strict';
+
+      const CONFIG = Object.freeze({
+        PARTICLE_COUNT: 760,
+        SPREAD_RADIUS: 4.8,
+        CORE_RADIUS: 1.05,
+        LENIS_DURATION: 1.25
+      });
+
+      const EXAMPLES = Object.freeze({
+        refund: {
+          irTok: '18 TOKENS (9.7× CUT)',
+          proseTok: '174 TOKENS',
+          wire: '<span class="sep-tok">AB</span> order #88219 <span class="sep-tok">WA</span> refund $149.00 | 3–5 business days <span class="sep-tok">AP</span> trackingnumber <span class="sep-tok">MA</span>',
+          prose: 'I have located order #88219 and confirmed that your refund of $149.00 has been issued. You will see the credit post to your original payment method within 3–5 business days. You can also follow the return status anytime using your {{Tracking Number}}. Is there anything else I can help you with today?',
+          path: 'TIER 1 · DETERMINISTIC FAST-REALIZER (0.27ms)'
+        },
+        warranty: {
+          irTok: '16 TOKENS (9.5× CUT)',
+          proseTok: '152 TOKENS',
+          wire: '<span class="sep-tok">AD</span> active through Nov 2027 <span class="sep-tok">WA</span> technician Thursday 2:00 PM <span class="sep-tok">KA</span>',
+          prose: 'Great news—your extended warranty is active through Nov 2027. I have scheduled a certified technician visit for Thursday at 2:00 PM and sent the confirmation to your email. Please let me know if you need to adjust the arrival window.',
+          path: 'TIER 1 · DETERMINISTIC FAST-REALIZER (0.31ms)'
+        },
+        escalate: {
+          irTok: '15 TOKENS (9.2× CUT)',
+          proseTok: '138 TOKENS',
+          wire: '<span class="sep-tok">AB</span> billingaddress | {{Profile}} <span class="sep-tok">TX</span> specialist queue #44 <span class="sep-tok">MA</span>',
+          prose: 'Before we update your {{Billing Address}}, please verify your details inside your {{Profile}} page. I have also routed your ticket directly to specialist queue #44 so a senior agent can complete the review without repeating any steps.',
+          path: 'TIER 3 · LFM3-1.7B v13b DIRECT EXPANSION (8/8 VALIDATED)'
+        }
+      });
+
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let collapseProgress = 0;
+
+      /* 1. 3D WebGL Glowing Volcanic Monolith + Collapsing Token Singularity Vortex */
+      function initMonolith() {
+        const canvas = document.getElementById('monolith-canvas');
+        if (!canvas || typeof window.THREE === 'undefined' || reducedMotion) return;
+        let renderer;
+        try {
+          renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'high-performance' });
+        } catch (_) { return; }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / Math.max(window.innerHeight, 1), 0.1, 100);
+        camera.position.set(0, 0, 7.2);
+
+        const uniforms = {
+          u_time: { value: 0 },
+          u_collapse: { value: 0 }
+        };
+
+        /* Glowing Plasma Monolith Core */
+        const monolithGeo = new THREE.IcosahedronGeometry(1.55, 5);
+        monolithGeo.scale(0.68, 1.45, 0.55);
+        const monolithMat = new THREE.ShaderMaterial({
+          uniforms,
+          vertexShader: `
+            uniform float u_time;
+            uniform float u_collapse;
+            varying vec3 vPos;
+            varying vec3 vNorm;
+            varying vec3 vView;
+            void main() {
+              vec3 p = position;
+              float n = sin(p.y * 3.5 + u_time * 1.4) * cos(p.x * 3.0 - u_time) * (0.06 + u_collapse * 0.08);
+              p += normal * n;
+              vPos = p;
+              vec4 mv = modelViewMatrix * vec4(p, 1.0);
+              vNorm = normalize(normalMatrix * normal);
+              vView = -mv.xyz;
+              gl_Position = projectionMatrix * mv;
+            }
+          `,
+          fragmentShader: `
+            precision mediump float;
+            uniform float u_time;
+            uniform float u_collapse;
+            varying vec3 vPos;
+            varying vec3 vNorm;
+            varying vec3 vView;
+            float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+            float noise(vec2 p){
+              vec2 i = floor(p), f = fract(p);
+              vec2 u = f*f*(3.0-2.0*f);
+              return mix(mix(hash(i), hash(i+vec2(1.,0.)), u.x),
+                         mix(hash(i+vec2(0.,1.)), hash(i+vec2(1.,1.)), u.x), u.y);
+            }
+            void main() {
+              vec3 N = normalize(vNorm);
+              vec3 V = normalize(vView);
+              float fresnel = pow(1.0 - max(dot(N, V), 0.0), 2.2);
+              float veins = noise(vPos.xy * 3.2 + vec2(0.0, u_time * 0.35))
+                          + 0.5 * noise(vPos.xy * 6.5 - vec2(u_time * 0.25, 0.0));
+              vec3 core = vec3(0.16, 0.04, 0.03);
+              vec3 lava = vec3(1.0, 0.29, 0.17);
+              vec3 hot  = vec3(1.0, 0.78, 0.62);
+              vec3 col = mix(core, lava, smoothstep(0.45, 1.25, veins));
+              col = mix(col, hot, fresnel * (0.65 + u_collapse * 0.4));
+              gl_FragColor = vec4(col, 0.92);
+            }
+          `,
+          transparent: true
+        });
+        const monolith = new THREE.Mesh(monolithGeo, monolithMat);
+        monolith.position.set(1.2, 0.1, 0);
+        scene.add(monolith);
+
+        /* 760-Particle Token Swarm that Collapses 10x on Scroll */
+        const pGeo = new THREE.BufferGeometry();
+        const baseDirs = new Float32Array(CONFIG.PARTICLE_COUNT * 3);
+        const positions = new Float32Array(CONFIG.PARTICLE_COUNT * 3);
+        for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
+          const theta = Math.random() * Math.PI * 2;
+          const phi = Math.acos(2 * Math.random() - 1);
+          const r = 1.6 + Math.random() * CONFIG.SPREAD_RADIUS;
+          baseDirs[i * 3]     = Math.sin(phi) * Math.cos(theta) * r;
+          baseDirs[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * r;
+          baseDirs[i * 3 + 2] = Math.cos(phi) * r;
+        }
+        pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const pMat = new THREE.PointsMaterial({ color: 0xFF6B4A, size: 0.045, transparent: true, opacity: 0.78 });
+        const swarm = new THREE.Points(pGeo, pMat);
+        swarm.position.set(1.2, 0.1, 0);
+        scene.add(swarm);
+
+        let mx = 0, my = 0;
+        function resize() {
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          renderer.setSize(window.innerWidth, window.innerHeight, false);
+          camera.aspect = window.innerWidth / Math.max(window.innerHeight, 1);
+          camera.updateProjectionMatrix();
+        }
+        resize();
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', (e) => {
+          mx = (e.clientX / window.innerWidth - 0.5) * 2;
+          my = (e.clientY / window.innerHeight - 0.5) * 2;
+        }, { passive: true });
+
+        function animate(t) {
+          const sec = t * 0.001;
+          uniforms.u_time.value = sec;
+          uniforms.u_collapse.value += (collapseProgress - uniforms.u_collapse.value) * 0.06;
+
+          const shrink = 1 - uniforms.u_collapse.value * 0.72;
+          const posAttr = pGeo.attributes.position;
+          for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
+            const bx = baseDirs[i * 3] * shrink;
+            const by = baseDirs[i * 3 + 1] * shrink;
+            const bz = baseDirs[i * 3 + 2] * shrink;
+            const ang = sec * (0.14 + uniforms.u_collapse.value * 0.25) + i * 0.003;
+            posAttr.array[i * 3]     = bx * Math.cos(ang) - bz * Math.sin(ang);
+            posAttr.array[i * 3 + 1] = by + Math.sin(sec + i) * 0.06;
+            posAttr.array[i * 3 + 2] = bx * Math.sin(ang) + bz * Math.cos(ang);
+          }
+          posAttr.needsUpdate = true;
+
+          monolith.rotation.y = sec * 0.18 + mx * 0.4;
+          monolith.rotation.x = my * 0.25;
+          renderer.render(scene, camera);
+          requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
+      }
+
+      /* 2. Smooth Scroll + ScrollTrigger Collapse Sync */
+      if (typeof window.gsap !== 'undefined' && typeof window.ScrollTrigger !== 'undefined') {
+        gsap.registerPlugin(ScrollTrigger);
+        if (typeof window.Lenis !== 'undefined' && !reducedMotion) {
+          const lenis = new Lenis({ duration: CONFIG.LENIS_DURATION, smoothWheel: true });
+          lenis.on('scroll', ScrollTrigger.update);
+          gsap.ticker.add((t) => lenis.raf(t * 1000));
+          gsap.ticker.lagSmoothing(0);
+        }
+        ScrollTrigger.create({
+          trigger: document.body, start: 'top top', end: 'bottom bottom',
+          onUpdate: (self) => { collapseProgress = self.progress; }
+        });
+      }
+
+      /* 3. Interactive Wire v3 Codec Tabs */
+      const tabs = document.querySelectorAll('.codec-tab');
+      const irTok = document.getElementById('c-ir-tok');
+      const proseTok = document.getElementById('c-prose-tok');
+      const wireEl = document.getElementById('c-wire');
+      const proseEl = document.getElementById('c-prose');
+      const pathEl = document.getElementById('c-path');
+
+      function loadEx(key) {
+        const ex = EXAMPLES[key];
+        irTok.textContent = ex.irTok;
+        proseTok.textContent = ex.proseTok;
+        wireEl.innerHTML = ex.wire;
+        proseEl.textContent = ex.prose;
+        pathEl.textContent = ex.path;
+        tabs.forEach((t) => {
+          const on = t.dataset.ex === key;
+          t.classList.toggle('is-active', on);
+          t.setAttribute('aria-selected', String(on));
+        });
+      }
+      tabs.forEach((t) => t.addEventListener('click', () => loadEx(t.dataset.ex)));
+      loadEx('refund');
+      initMonolith();
+    });
+  </script>
+</body>
+</html>

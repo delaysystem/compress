@@ -8,7 +8,7 @@
 // Request values are never echoed into error messages.
 
 import type { ExpansionCache } from './cache.ts';
-import { NIM_API_KEY_NAME } from './config.ts';
+import { FAST_LATENCY_BUDGET_MS, NIM_API_KEY_NAME } from './config.ts';
 import type { Dictionary } from './dict.ts';
 import {
 	classifyLine,
@@ -28,7 +28,7 @@ import { NO_THINK_EXTRA_BODY } from './openai.ts';
 import { tryFastRealize } from './realizer.ts';
 import type { SpanStore } from './spanref.ts';
 import { formatServerTiming, roundMs, type StageTimings } from './timing.ts';
-import type { ValidatorVerdict } from './validator.ts';
+import { type ValidatorVerdict, validateExpansion } from './validator.ts';
 import { autofixV3, decodeV3, parseV3, type V3Segment } from './wirev3.ts';
 
 export interface AppDeps {
@@ -55,6 +55,7 @@ export interface ParsedExpandBody {
 	repairAttempts: number | undefined;
 	fastMode: boolean | undefined;
 	lang: SupportedLang | undefined;
+	latencyBudgetMs: number | undefined;
 }
 
 /** Conservative key-safe charset (no separators/control chars). Verified against KV at provisioning follow-up. */
@@ -137,6 +138,18 @@ export function parseExpandBody(body: unknown): ParseBodyResult {
 			return { ok: false, error: 'lang: unsupported language' };
 		}
 	}
+	const budgetRaw = r.latencyBudgetMs;
+	if (
+		budgetRaw !== undefined &&
+		(typeof budgetRaw !== 'number' ||
+			!Number.isFinite(budgetRaw) ||
+			budgetRaw < 0)
+	) {
+		return {
+			ok: false,
+			error: 'latencyBudgetMs: must be a non-negative number',
+		};
+	}
 	return {
 		ok: true,
 		value: {
@@ -150,6 +163,7 @@ export function parseExpandBody(body: unknown): ParseBodyResult {
 			repairAttempts: repairRaw,
 			fastMode: fastRaw,
 			lang,
+			latencyBudgetMs: budgetRaw,
 		},
 	};
 }
@@ -385,42 +399,85 @@ export async function handleExpand(
 		};
 	}
 	let result: LadderResult;
+	const budgetMs =
+		req.latencyBudgetMs ??
+		(isV3 && allowFast ? FAST_LATENCY_BUDGET_MS : undefined);
+	const ladderPromise = runLadder(preparedIr, {
+		expandPrepared: async (irText: string, hint?: string) => {
+			const r =
+				hint === undefined
+					? await expand(
+							llm,
+							req.model,
+							irText,
+							undefined,
+							NO_THINK_EXTRA_BODY,
+							lang,
+						)
+					: await expand(
+							llm,
+							req.model,
+							irText,
+							hint,
+							NO_THINK_EXTRA_BODY,
+							lang,
+						);
+			return {
+				text: r.text,
+				finishReason: r.finishReason,
+				usage: r.usage ?? null,
+			};
+		},
+		templateRender: (irText: string) => renderTemplateFallback(irText),
+		slotValues: req.slotValues,
+		...(req.repairAttempts === undefined
+			? {}
+			: { repairAttempts: req.repairAttempts }),
+		skipStyleRepair: req.fastMode ?? isV3,
+		...(allowFast ? { fastRepair: greetingOnlyRepair(lang) } : {}),
+		lang,
+	});
+
 	try {
-		result = await runLadder(preparedIr, {
-			expandPrepared: async (irText: string, hint?: string) => {
-				const r =
-					hint === undefined
-						? await expand(
-								llm,
-								req.model,
-								irText,
-								undefined,
-								NO_THINK_EXTRA_BODY,
-								lang,
-							)
-						: await expand(
-								llm,
-								req.model,
-								irText,
-								hint,
-								NO_THINK_EXTRA_BODY,
-								lang,
-							);
-				return {
-					text: r.text,
-					finishReason: r.finishReason,
-					usage: r.usage ?? null,
+		if (budgetMs !== undefined && budgetMs > 0) {
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			const timedOut = Symbol('budget');
+			const race = await Promise.race([
+				ladderPromise.finally(() => {
+					if (timer !== undefined) {
+						clearTimeout(timer);
+					}
+				}),
+				new Promise<typeof timedOut>((resolve) => {
+					timer = setTimeout(() => resolve(timedOut), budgetMs);
+				}),
+			]);
+			if (race === timedOut) {
+				// Prevent unhandled rejection if the background LLM call later fails.
+				void ladderPromise.catch(() => {});
+				const rendered = renderTemplateFallback(preparedIr);
+				const vBudget = validateExpansion({
+					splicedIr: preparedIr,
+					slotValues: req.slotValues,
+					output: rendered,
+					finishReason: null,
+					source: 'template',
+					lang,
+				});
+				result = {
+					ok: vBudget.pass,
+					text: rendered,
+					path: 'template',
+					verdicts: [vBudget],
+					usage: null,
+					timings: { llmMs: budgetMs, validateMs: 0, repairMs: 0 },
 				};
-			},
-			templateRender: (irText: string) => renderTemplateFallback(irText),
-			slotValues: req.slotValues,
-			...(req.repairAttempts === undefined
-				? {}
-				: { repairAttempts: req.repairAttempts }),
-			skipStyleRepair: req.fastMode ?? isV3,
-			...(allowFast ? { fastRepair: greetingOnlyRepair(lang) } : {}),
-			lang,
-		});
+			} else {
+				result = race;
+			}
+		} else {
+			result = await ladderPromise;
+		}
 	} catch (e) {
 		console.error(
 			'expander upstream error:',

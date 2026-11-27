@@ -41,6 +41,29 @@ export interface LanguageMeta {
 	signoffCloseRe: RegExp;
 }
 
+export const TX_DETAIL_PREFIX: Record<SupportedLang, string> = {
+	en: 'Please also note the following details:',
+	zh: '请同时留意以下详情：',
+	hi: 'कृपया निम्नलिखित विवरण भी ध्यान में रखें:',
+	es: 'Tenga en cuenta también los siguientes detalles:',
+	fr: 'Veuillez également noter les détails suivants :',
+	ar: 'يرجى أيضًا ملاحظة التفاصيل التالية:',
+	bn: 'অনুগ্রহ করে নিম্নলিখিত বিবরণগুলোও লক্ষ্য করুন:',
+	pt: 'Observe também os seguintes detalhes:',
+	ru: 'Также обратите внимание на следующие детали:',
+	ur: 'براہ کرم درج ذیل تفصیلات بھی نوٹ کریں:',
+	id: 'Harap perhatikan juga detail berikut:',
+	de: 'Bitte beachten Sie außerdem folgende Details:',
+	ja: 'あわせて以下の詳細もご確認ください：',
+	sw: 'Tafadhali pia kumbuka maelezo yafuatayo:',
+	mr: 'कृपया खालील तपशीलही लक्षात घ्या:',
+	te: 'దయచేసి ఈ క్రింది వివరాలను కూడా గమనించండి:',
+	tr: 'Lütfen şu ayrıntıları da dikkate alın:',
+	ta: 'பின்வரும் விவரங்களையும் தயவுசெய்து கவனிக்கவும்:',
+	vi: 'Vui lòng lưu ý thêm các chi tiết sau:',
+	ko: '다음 세부 정보도 함께 참고해 주세요:',
+};
+
 const EN_GLUE = new Set(
 	(
 		'a,an,the,and,or,but,to,of,in,on,at,by,for,with,from,is,are,was,were,' +

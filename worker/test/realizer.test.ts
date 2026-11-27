@@ -77,8 +77,29 @@ describe('realizer (Tier 1 deterministic fluent realization)', () => {
 		}
 	});
 
-	it('falls through (returns ok=false) on telegraphic TX free text', () => {
-		const ir = 'PA account details TX check queue status tomorrow morning';
+	it('realizes mixed code + TX segments deterministically in Tier 1', () => {
+		const ir =
+			'PA account details TX provide specific details and supporting information';
+		const segs = parseV3(ir, dictV3, markers);
+		const decoded = decodeV3(segs, dictV3);
+		expect(decoded.ok).toBe(true);
+		if (!decoded.ok) return;
+
+		const res = tryFastRealize({
+			segments: segs,
+			preparedIr: decoded.text,
+			slotValues: [],
+			dict: dictV3,
+		});
+		expect(res.ok).toBe(true);
+		if (res.ok) {
+			expect(res.text).toContain('Please provide specific details');
+		}
+	});
+
+	it('falls through (returns ok=false) on long code-less TX free text (>40 words)', () => {
+		const longText = Array.from({ length: 45 }, (_, i) => `item${i}`).join(' ');
+		const ir = `TX ${longText}`;
 		const segs = parseV3(ir, dictV3, markers);
 		const decoded = decodeV3(segs, dictV3);
 		expect(decoded.ok).toBe(true);

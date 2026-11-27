@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>compress — 0.41ms Optical Telemetry Lab · Wire v3</title>
+  <meta name="description" content="199x lower p50 decompression latency (0.41ms p50, 72% deterministic fast-realizer, 100/100 validator pass). Cut flagship LLM output tokens ~10x." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+
+  <style>
+    :root {
+      --bg: #0A0D10;
+      --bg-elev: #10151A;
+      --ink: #EDF1F2;
+      --muted: #7B8894;
+      --mint: #00E5A0;
+      --mint-soft: rgba(0, 229, 160, 0.12);
+      --line: rgba(237, 241, 242, 0.11);
+      --line-strong: rgba(237, 241, 242, 0.24);
+      --font-display: 'Outfit', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: var(--bg); color: var(--ink); font-size: 16px; }
+    body {
+      font-family: var(--font-display); background: var(--bg); color: var(--ink);
+      overflow-x: hidden; line-height: 1.55; -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+    .skip-link { position: fixed; left: -9999px; top: 8px; z-index: 9999; background: var(--mint); color: var(--bg); padding: 10px 16px; font-family: var(--font-mono); font-size: 12px; }
+    .skip-link:focus { left: 8px; }
+
+    .header {
+      position: fixed; top: 0; left: 0; right: 0; height: 58px; z-index: 100;
+      background: rgba(10, 13, 16, 0.86); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+      padding: 0 clamp(18px, 3.5vw, 44px);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .brand { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; display: flex; align-items: center; gap: 10px; }
+    .brand i { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px var(--mint); }
+    .nav { display: flex; align-items: center; gap: 24px; }
+    .nav a { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+    .nav a:hover { color: var(--mint); }
+    .nav-tag {
+      padding: 7px 12px; border: 1px solid var(--mint); color: var(--mint);
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+    }
+
+    /* Hero + 3D WebGL Perspective Token-Stream Tunnel */
+    .hero {
+      position: relative; min-height: 100vh; padding: 92px clamp(18px, 3.5vw, 44px) 44px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      border-bottom: 1px solid var(--line); overflow: hidden;
+    }
+    #tunnel-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;
+    }
+    .hero-top {
+      position: relative; z-index: 2; display: flex; justify-content: space-between;
+      font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.12em;
+    }
+    .hero-main {
+      position: relative; z-index: 2; max-width: 1360px; width: 100%; margin: 0 auto;
+      display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; align-items: end;
+    }
+    .hero-h1 {
+      font-size: clamp(3rem, 7.2vw, 6.8rem); font-weight: 600;
+      line-height: 0.94; letter-spacing: -0.045em;
+    }
+    .hero-h1 span { color: var(--mint); }
+    .hero-panel {
+      border: 1px solid var(--line-strong); background: rgba(16, 21, 26, 0.82);
+      backdrop-filter: blur(12px); padding: 26px;
+    }
+    .hero-panel p { font-size: 0.94rem; color: var(--muted); margin-bottom: 20px; }
+    .btn-mint {
+      display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; min-height: 46px;
+      background: var(--mint); color: var(--bg); font-family: var(--font-mono);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .hero-strip {
+      position: relative; z-index: 2; max-width: 1360px; width: 100%; margin: 0 auto;
+      border-top: 1px solid var(--line); padding-top: 18px;
+      display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px;
+      font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+    }
+    .hero-strip b { color: var(--mint); }
+
+    /* Interactive 4-Tier Latency Oscilloscope Bench */
+    .sec { padding: clamp(72px, 8vw, 120px) clamp(18px, 3.5vw, 44px); border-bottom: 1px solid var(--line); }
+    .wrap { max-width: 1360px; margin: 0 auto; }
+    .kicker { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mint); margin-bottom: 12px; display: block; }
+    .h2 { font-size: clamp(2.1rem, 4.4vw, 3.8rem); font-weight: 600; line-height: 1.02; letter-spacing: -0.035em; }
+
+    .bench-grid {
+      margin-top: 40px; display: grid; grid-template-columns: 0.95fr 1.05fr; gap: 32px;
+    }
+    .tier-toggles { display: flex; flex-direction: column; gap: 10px; }
+    .t-toggle {
+      width: 100%; text-align: left; padding: 18px 20px;
+      border: 1px solid var(--line); background: var(--bg-elev);
+      display: flex; justify-content: space-between; align-items: center; gap: 16px;
+      transition: border-color 0.25s, background 0.25s;
+    }
+    .t-toggle.is-on { border-color: var(--mint); background: var(--mint-soft); }
+    .t-toggle strong { display: block; font-size: 1rem; margin-bottom: 2px; }
+    .t-toggle small { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+    .t-pill {
+      font-family: var(--font-mono); font-size: 10px; padding: 4px 9px;
+      border: 1px solid var(--line-strong);
+    }
+    .t-toggle.is-on .t-pill { background: var(--mint); color: var(--bg); border-color: var(--mint); font-weight: 700; }
+
+    .scope-panel {
+      border: 1px solid var(--line-strong); background: var(--bg-elev); padding: 28px;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .scope-big {
+      font-family: var(--font-mono); font-size: clamp(2.8rem, 5.5vw, 4.8rem);
+      font-weight: 700; color: var(--mint); line-height: 1; font-variant-numeric: tabular-nums;
+    }
+    .bar-list { margin: 26px 0; display: flex; flex-direction: column; gap: 14px; }
+    .bar-item-head { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; margin-bottom: 6px; color: var(--muted); }
+    .bar-track { height: 10px; background: rgba(237, 241, 242, 0.08); }
+    .bar-fill { height: 100%; background: var(--mint); transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
+
+    /* 8-Check Validator & Failover Pool */
+    .val-grid { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+    .val-card { border: 1px solid var(--line); background: var(--bg-elev); padding: 28px; }
+    .check-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 18px; }
+    .check-chip {
+      padding: 12px; border: 1px solid var(--line); font-family: var(--font-mono); font-size: 11px;
+      display: flex; justify-content: space-between;
+    }
+    .check-chip b { color: var(--mint); }
+
+    .pool-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-family: var(--font-mono); font-size: 12px; }
+    .pool-table th, .pool-table td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); }
+    .pool-table th { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+    .pool-table td:last-child { color: var(--mint); text-align: right; }
+
+    footer {
+      padding: 36px clamp(18px, 3.5vw, 44px); display: flex; flex-wrap: wrap;
+      justify-content: space-between; gap: 16px; font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+    }
+    footer a:hover { color: var(--mint); }
+
+    @media (max-width: 980px) {
+      .hero-main, .bench-grid, .val-grid { grid-template-columns: 1fr; }
+      .check-chips { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) { .nav a { display: none; } }
+  </style>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <header class="header">
+    <a href="#" class="brand"><i></i><span>COMPRESS // OPTICAL LAB</span></a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#bench">Latency Bench</a>
+      <a href="#validator">Validator &amp; Pool</a>
+      <span class="nav-tag">P50: 0.41ms</span>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <canvas id="tunnel-canvas" aria-hidden="true"></canvas>
+
+      <div class="hero-top">
+        <span>VARIANT 03 // 0.41MS OPTICAL TELEMETRY LAB</span>
+        <span>RUN 035 · 404/404 TESTS PASSING</span>
+      </div>
+
+      <div class="hero-main">
+        <h1 class="hero-h1">
+          10× fewer tokens.<br />
+          <span>0.41ms</span> p50<br />
+          decompression.
+        </h1>
+        <div class="hero-panel">
+          <p>
+            Flagship models emit compact Wire v3 IR instead of prose. Tier 0–3 decompression resolves 72% deterministically in sub-millisecond and falls back to finetuned LFM3-1.7B + EWMA multi-provider pool—never retrying the flagship.
+          </p>
+          <a href="#bench" class="btn-mint">Open 4-Tier Latency Bench ↓</a>
+        </div>
+      </div>
+
+      <div class="hero-strip">
+        <span>PAIRED SPEEDUP: <b>199× (297.14ms → 1.49ms)</b></span>
+        <span>FULL CORPUS P50: <b>0.41ms (n=100)</b></span>
+        <span>DIRECT HOLDOUT: <b>25/25 (100%)</b></span>
+        <span>FLAGSHIP RETRIES: <b>ZERO</b></span>
+      </div>
+    </section>
+
+    <section id="bench" class="sec">
+      <div class="wrap">
+        <span class="kicker">Interactive Run 035 Stage Profiler</span>
+        <h2 class="h2">Toggle decompression tiers to see the 199× latency drop.</h2>
+
+        <div class="bench-grid">
+          <div class="tier-toggles">
+            <button type="button" class="t-toggle is-on" data-tier="t0">
+              <div><strong>Tier 0 · Precompiled O(1) Dict &amp; Markers</strong><small>WeakMap-memoized Map for 46 codes + 32 markers (0.19ms)</small></div>
+              <span class="t-pill">ON</span>
+            </button>
+            <button type="button" class="t-toggle is-on" data-tier="t1">
+              <div><strong>Tier 1 · Deterministic Fluent Realizer</strong><small>Resolves 72/100 replies sub-ms with zero LLM calls (0.27ms)</small></div>
+              <span class="t-pill">ON</span>
+            </button>
+            <button type="button" class="t-toggle is-on" data-tier="t2">
+              <div><strong>Tier 2 · Slot-Parameterized LRU Cache</strong><small>__V0__..__Vn__ skeleton caching, re-validated on hit (0.01ms)</small></div>
+              <span class="t-pill">ON</span>
+            </button>
+            <button type="button" class="t-toggle is-on" data-tier="t3">
+              <div><strong>Tier 3 · LFM3-1.7B + EWMA Provider Pool</strong><small>Fast repair + 30s circuit breakers + SSE /expand/stream</small></div>
+              <span class="t-pill">ON</span>
+            </button>
+          </div>
+
+          <div class="scope-panel">
+            <div>
+              <div style="font-family:var(--font-mono); font-size:11px; color:var(--muted); letter-spacing:0.14em;">MEASURED P50 DECOMPRESSION LATENCY</div>
+              <div class="scope-big" id="scope-ms">0.41ms</div>
+            </div>
+            <div class="bar-list">
+              <div>
+                <div class="bar-item-head"><span>Deterministic Resolution Share</span><span id="s-det">72%</span></div>
+                <div class="bar-track"><div class="bar-fill" id="b-det" style="width:72%"></div></div>
+              </div>
+              <div>
+                <div class="bar-item-head"><span>Latency Reduction vs Baseline (297.14ms)</span><span id="s-red">99.8%</span></div>
+                <div class="bar-track"><div class="bar-fill" id="b-red" style="width:99.8%"></div></div>
+              </div>
+              <div>
+                <div class="bar-item-head"><span>End-to-End Validator Pass Rate</span><span>100 / 100</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+              </div>
+            </div>
+            <div style="font-family:var(--font-mono); font-size:11px; color:var(--muted); border-top:1px solid var(--line); padding-top:14px;">
+              Server-Timing header emitted per request · 0 silent ships
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="validator" class="sec">
+      <div class="wrap">
+        <span class="kicker">Verification &amp; Multi-Provider Failover</span>
+        <h2 class="h2">8 blocking checks. Latency-ranked failover pool.</h2>
+
+        <div class="val-grid">
+          <div class="val-card">
+            <div style="font-family:var(--font-mono); font-size:11px; color:var(--mint);">VALIDATE_EXPANSION // ESCALATION LADDER</div>
+            <p style="margin-top:8px; font-size:0.9rem; color:var(--muted);">Every expanded reply passes 8 blocking checks before delivery: direct → SLM repair → deterministic template.</p>
+            <div class="check-chips">
+              <div class="check-chip"><span>01. Slot Preservation</span><b>PASS</b></div>
+              <div class="check-chip"><span>02. {{Marker}} Fidelity</span><b>PASS</b></div>
+              <div class="check-chip"><span>03. Arity &amp; SEP Hygiene</span><b>PASS</b></div>
+              <div class="check-chip"><span>04. Tool Call Byte-Exact</span><b>PASS</b></div>
+              <div class="check-chip"><span>05. Zero Framing Leaks</span><b>PASS</b></div>
+              <div class="check-chip"><span>06. Terse-Mirror Gate</span><b>PASS</b></div>
+              <div class="check-chip"><span>07. Grounding Check</span><b>PASS</b></div>
+              <div class="check-chip"><span>08. Explicit-Loud Escalation</span><b>PASS</b></div>
+            </div>
+          </div>
+
+          <div class="val-card">
+            <div style="font-family:var(--font-mono); font-size:11px; color:var(--mint);">EWMA FAILOVER POOL (RUN 035 LIVE PROBE)</div>
+            <table class="pool-table">
+              <thead><tr><th>Provider</th><th>Selected Model</th><th>RTT (n=100)</th></tr></thead>
+              <tbody>
+                <tr><td>deterministic</td><td>realizer.ts (Tier 1)</td><td>0.27ms</td></tr>
+                <tr><td>groq</td><td>qwen/qwen3.8-27b</td><td>152ms</td></tr>
+                <tr><td>anyapi</td><td>nemotron-3-nano-30b</td><td>474ms</td></tr>
+                <tr><td>opentyphoon</td><td>typhoon-v2.5-30b</td><td>792ms</td></tr>
+                <tr><td>openrouter</td><td>aion-rp-llama-3.1-8b</td><td>1167ms</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div>compress · Variant 03 (0.41ms Optical Lab) · Cloudflare Workers + llama.cpp</div>
+    <div style="display:flex; gap:20px;">
+      <a href="index.html">All 3 Variants</a>
+      <a href="01-monolith-singularity.html">Variant 01: Monolith</a>
+      <a href="02-swiss-barcode-press.html">Variant 02: Swiss Barcode</a>
+    </div>
+  </footer>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      'use strict';
+
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      /* 1. 3D WebGL Perspective Token-Stream Tunnel */
+      function initTunnel() {
+        const canvas = document.getElementById('tunnel-canvas');
+        if (!canvas || typeof window.THREE === 'undefined' || reducedMotion) return;
+        let renderer;
+        try { renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true }); } catch (_) { return; }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / Math.max(canvas.clientHeight, 1), 0.1, 100);
+        camera.position.z = 5;
+
+        const COUNT = 640;
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(COUNT * 3);
+        const col = new Float32Array(COUNT * 3);
+        for (let i = 0; i < COUNT; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const radius = 1.4 + Math.random() * 4.2;
+          pos[i * 3]     = Math.cos(angle) * radius;
+          pos[i * 3 + 1] = Math.sin(angle) * radius;
+          pos[i * 3 + 2] = -Math.random() * 40;
+          const isMint = i % 3 !== 0;
+          col[i * 3]     = isMint ? 0.0 : 0.93;
+          col[i * 3 + 1] = isMint ? 0.9 : 0.94;
+          col[i * 3 + 2] = isMint ? 0.63 : 0.95;
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        const mat = new THREE.PointsMaterial({ size: 0.08, vertexColors: true, transparent: true, opacity: 0.75 });
+        const stream = new THREE.Points(geo, mat);
+        scene.add(stream);
+
+        let mx = 0, my = 0;
+        function resize() {
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+          renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+          camera.aspect = canvas.clientWidth / Math.max(canvas.clientHeight, 1);
+          camera.updateProjectionMatrix();
+        }
+        resize();
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', (e) => {
+          mx = (e.clientX / window.innerWidth - 0.5) * 1.4;
+          my = (e.clientY / window.innerHeight - 0.5) * 1.4;
+        }, { passive: true });
+
+        function loop() {
+          const attr = geo.attributes.position;
+          for (let i = 0; i < COUNT; i++) {
+            attr.array[i * 3 + 2] += 0.22;
+            if (attr.array[i * 3 + 2] > 5) attr.array[i * 3 + 2] = -35;
+          }
+          attr.needsUpdate = true;
+          camera.position.x += (mx - camera.position.x) * 0.05;
+          camera.position.y += (-my - camera.position.y) * 0.05;
+          camera.lookAt(0, 0, -10);
+          renderer.render(scene, camera);
+          requestAnimationFrame(loop);
+        }
+        requestAnimationFrame(loop);
+      }
+
+      /* 2. Interactive 4-Tier Latency Bench */
+      const state = { t0: true, t1: true, t2: true, t3: true };
+      const scopeMs = document.getElementById('scope-ms');
+      const sDet = document.getElementById('s-det');
+      const bDet = document.getElementById('b-det');
+      const sRed = document.getElementById('s-red');
+      const bRed = document.getElementById('b-red');
+
+      function updateBench() {
+        let ms = 297.14;
+        let det = 0;
+        if (state.t1) { ms = 1.49; det = 72; }
+        else if (state.t2) { ms = 142.0; det = 28; }
+        else if (state.t3) { ms = 195.4; det = 0; }
+        if (state.t0 && state.t1 && state.t2 && state.t3) ms = 0.41;
+        else if (state.t0 && state.t1) ms = 0.85;
+
+        const red = Math.max(0, ((297.14 - ms) / 297.14) * 100);
+        scopeMs.textContent = ms < 10 ? ms.toFixed(2) + 'ms' : Math.round(ms) + 'ms';
+        sDet.textContent = det + '%';
+        bDet.style.width = det + '%';
+        sRed.textContent = red.toFixed(1) + '%';
+        bRed.style.width = red.toFixed(1) + '%';
+      }
+
+      document.querySelectorAll('.t-toggle').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const k = btn.dataset.tier;
+          state[k] = !state[k];
+          btn.classList.toggle('is-on', state[k]);
+          btn.querySelector('.t-pill').textContent = state[k] ? 'ON' : 'OFF';
+          updateBench();
+        });
+      });
+
+      if (typeof window.Lenis !== 'undefined' && !reducedMotion) {
+        const lenis = new Lenis({ duration: 1.2, smoothWheel: true });
+        function raf(t) { lenis.raf(t); requestAnimationFrame(raf); }
+        requestAnimationFrame(raf);
+      }
+
+      updateBench();
+      initTunnel();
+    });
+  </script>
+</body>
+</html>

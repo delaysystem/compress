@@ -78,3 +78,6 @@ export const REPAIR_ATTEMPTS = 1;
  * eval passed (see run-reports/034-latency-methods.md). Default is compact;
  * set to 'full' to restore the verbose rules. */
 export const EXPANSION_PROMPT_MODE: 'full' | 'compact' = 'compact';
+/** Hard Tier 3 latency ceiling (ms) in v3 fast mode: if remote LLM exceeds
+ * this budget, immediately serve deterministic fallback so p95 never spikes. */
+export const FAST_LATENCY_BUDGET_MS = 250;

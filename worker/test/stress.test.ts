@@ -110,15 +110,13 @@ describe('expander stress & edge cases', () => {
 			},
 		]);
 		const deps: AppDeps = {
-			dict: dictV3,
-			dicts: { 'ir-v3': dictV3 },
-			markers,
+			dict: { version: 'v2-test', entries: [] },
 			llm: pool,
 			loadSpans: () => Promise.resolve({ ok: false, reason: 'not-configured' }),
 		};
 		const r = await handleExpand(deps, {
-			ir: 'TX procesar reembolso $49.99 ahora',
-			dictVersion: 'ir-v3',
+			ir: 'procesar reembolso $49.99 ahora',
+			dictVersion: 'v2-test',
 			kbVersion: 'kb1',
 			model: 'auto',
 			lang: 'es',
@@ -130,6 +128,53 @@ describe('expander stress & edge cases', () => {
 		expect(j.ok).toBe(true);
 		expect(j.path).toBe('repaired');
 		expect(j.text).toBe('Su reembolso de $49.99 ha sido procesado.');
+	});
+
+	it('enforces latencyBudgetMs ceiling when Tier 3 LLM is slow', async () => {
+		const slowPool = new ProviderPool([
+			{
+				config: {
+					id: 'slow',
+					keyName: 'K',
+					baseUrl: 'https://slow.test/v1',
+					defaultModel: 'm',
+				},
+				client: {
+					generate: () =>
+						new Promise((resolve) =>
+							setTimeout(
+								() =>
+									resolve({
+										text: 'Slow reply that arrived too late.',
+										finishReason: 'STOP',
+									}),
+								200,
+							),
+						),
+				},
+			},
+		]);
+		const deps: AppDeps = {
+			dict: { version: 'v2-test', entries: [] },
+			llm: slowPool,
+			loadSpans: () => Promise.resolve({ ok: false, reason: 'not-configured' }),
+		};
+		const t0 = performance.now();
+		const r = await handleExpand(deps, {
+			ir: 'Refund approved for order W123',
+			dictVersion: 'v2-test',
+			kbVersion: 'kb1',
+			model: 'auto',
+			slotValues: ['W123'],
+			latencyBudgetMs: 25,
+		});
+		const elapsed = performance.now() - t0;
+		expect(elapsed).toBeLessThan(120);
+		expect(r.status).toBe(200);
+		const j = r.json as { ok: boolean; path: string; text: string };
+		expect(j.ok).toBe(true);
+		expect(j.path).toBe('template');
+		expect(j.text).toContain('W123');
 	});
 
 	it('cascades through multiple failing providers and recovers on the last healthy one', async () => {
